@@ -1,0 +1,36 @@
+project:
+  name: "Install Demo"
+  root: "."
+
+apps:
+  demo:
+    name: "Install Demo"
+    description: "Demo to show install working"
+    workdir: "."
+
+    install:
+      dependencies:
+        - name: "jq (JSON processor)"
+          type: brew
+          package: jq
+          check: "which jq"
+        
+        - name: "tree (directory viewer)"
+          type: brew
+          package: tree
+          check: "which tree"
+          optional: true
+
+      steps:
+        - name: "Create test npm project"
+          workdir: "."
+          commands:
+            - "mkdir -p test-npm"
+            - "cd test-npm && echo '{\"name\": \"test\", \"version\": \"1.0.0\"}' > package.json"
+          skip_if: "[ -d test-npm ]"
+
+    services:
+      - name: demo
+        type: process
+        command: "echo 'Demo service'"
+        workdir: "."
