@@ -1,0 +1,35 @@
+# DevUp Configuration File
+# This is the main configuration for devup CLI
+
+version: "1.0"
+
+apps:
+  # Example: Legacy project from devup_v2
+  legacy:
+    name: "Legacy Engineering Supervisor"
+    description: "Imported from existing Makefile/shell scripts"
+    workdir: "."
+
+    services:
+      - name: ui
+        type: process
+        command: "echo 'UI service placeholder'"
+        port: 3000
+        logfile: "logs/ui.log"
+
+      - name: backend
+        type: process
+        command: "echo 'Backend service placeholder'"
+        port: 8000
+        logfile: "logs/backend.log"
+
+    modes:
+      default:
+        name: "Default Mode"
+        description: "Basic mode"
+        services:
+          - ui
+          - backend
+
+# Add more apps below as needed
+# See examples/ directory for more configuration templates
