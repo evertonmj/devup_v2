@@ -1,0 +1,187 @@
+# Example configuration for Engineering Supervisor Agent
+# This mirrors the functionality from the original Makefile/shell scripts
+
+version: "1.0"
+
+apps:
+  engineering-supervisor:
+    name: "Engineering Supervisor Agent"
+    description: "Full-stack application with React UI and Python backend"
+    workdir: "/Users/everton.jesus/workspace/projects/gilead/engineering-supervisor-agent/Container"
+
+    services:
+      # React UI Service
+      - name: ui
+        type: process
+        command: "cd ui && npm run start"
+        workdir: "."
+        port: 3006
+        logfile: "logs/ui.log"
+        healthcheck:
+          type: http
+          endpoint: "http://localhost:3006"
+          timeout: 30s
+          interval: 2s
+          retries: 152
+        environment:
+          NODE_ENV: development
+
+      # Caddy Reverse Proxy
+      - name: caddy
+        type: process
+        command: "cd service && caddy run --config Caddyfile"
+        workdir: "."
+        port: 3000
+        logfile: "logs/caddy.log"
+        dependencies:
+          - ui
+        healthcheck:
+          type: http
+          endpoint: "https://localhost:3000"
+          timeout: 10s
+          interval: 1s
+          retries: 10
+
+      # Mock Backend (Node.js)
+      - name: mock-backend
+        type: process
+        command: "cd ui && npm run mock"
+        workdir: "."
+        port: 8001
+        logfile: "logs/service.log"
+        healthcheck:
+          type: http
+          endpoint: "http://localhost:8001"
+          timeout: 30s
+          interval: 2s
+          retries: 15
+
+      # Python Backend (with mocks)
+      - name: python-backend-mock
+        type: process
+        command: |
+          cd service && \
+          source venv/bin/activate && \
+          export PYTHONPATH=src:tests && \
+          python3.12 tests/testbotofbots/localmock/main.py
+        workdir: "."
+        port: 8000
+        logfile: "logs/service.log"
+        healthcheck:
+          type: http
+          endpoint: "http://localhost:8000"
+          timeout: 30s
+          interval: 2s
+          retries: 15
+        environment:
+          LOG_LEVEL: INFO
+
+      # Python Backend (real connections)
+      - name: python-backend-real
+        type: process
+        command: |
+          cd service && \
+          source venv/bin/activate && \
+          export PYTHONPATH=src && \
+          python3.12 src/botofbots/app.py
+        workdir: "."
+        port: 8000
+        logfile: "logs/service.log"
+        healthcheck:
+          type: http
+          endpoint: "http://localhost:8000"
+          timeout: 30s
+          interval: 2s
+          retries: 15
+        environment:
+          LOG_LEVEL: INFO
+
+      # Python Backend (debug mode)
+      - name: python-backend-debug
+        type: process
+        command: |
+          cd service && \
+          source venv/bin/activate && \
+          export PYTHONPATH=src:tests && \
+          export LOG_LEVEL=DEBUG && \
+          export ENABLE_DEBUG_ENDPOINTS=true && \
+          export UVICORN_LOG_LEVEL=debug && \
+          python3.12 -u tests/testbotofbots/localmock/main.py
+        workdir: "."
+        port: 8000
+        logfile: "logs/service.log"
+        healthcheck:
+          type: http
+          endpoint: "http://localhost:8000"
+          timeout: 30s
+          interval: 2s
+          retries: 15
+        environment:
+          LOG_LEVEL: DEBUG
+          ENABLE_DEBUG_ENDPOINTS: "true"
+          UVICORN_LOG_LEVEL: debug
+
+    modes:
+      # Default mode: Mock backend (fastest, no config needed)
+      default:
+        name: "Mock Backend"
+        description: "Uses Node.js mock server for backend"
+        services:
+          - ui
+          - caddy
+          - mock-backend
+        environment:
+          MODE: mock
+
+      # Python mode: Python backend with mocked external services
+      py:
+        name: "Python Backend (Mocked)"
+        description: "Real Python backend with mocked Databricks/AWS"
+        services:
+          - ui
+          - caddy
+          - python-backend-mock
+        environment:
+          MODE: python-mock
+
+      # Python real mode: Python backend with real connections
+      py-real:
+        name: "Python Backend (Real)"
+        description: "Python backend with actual Databricks/AWS connections"
+        services:
+          - ui
+          - caddy
+          - python-backend-real
+        environment:
+          MODE: python-real
+
+      # Debug mode: Python backend with enhanced debugging
+      debug:
+        name: "Debug Mode"
+        description: "Python backend with verbose logging and debug features"
+        services:
+          - ui
+          - caddy
+          - python-backend-debug
+        environment:
+          MODE: debug
+
+    hooks:
+      pre_start:
+        - "mkdir -p logs"
+        - "echo 'Starting Engineering Supervisor Agent...'"
+
+      post_start:
+        - "echo 'All services started successfully!'"
+        - "echo 'Access the application at: https://localhost:3006'"
+
+      pre_stop:
+        - "echo 'Stopping services...'"
+
+      post_stop:
+        - "echo 'All services stopped.'"
+
+    health:
+      enabled: true
+      timeout: 60s
+      interval: 5s

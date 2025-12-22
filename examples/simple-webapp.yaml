@@ -1,0 +1,86 @@
+# Example: Simple web application with frontend and backend
+# This demonstrates how to configure a different app
+
+version: "1.0"
+
+apps:
+  my-webapp:
+    name: "My Web Application"
+    description: "Simple React + Express application"
+    workdir: "/path/to/my-webapp"
+
+    services:
+      # Frontend
+      - name: frontend
+        type: process
+        command: "npm run dev"
+        workdir: "frontend"
+        port: 3000
+        logfile: "logs/frontend.log"
+        healthcheck:
+          type: http
+          endpoint: "http://localhost:3000"
+          timeout: 20s
+
+      # Backend API
+      - name: backend
+        type: process
+        command: "npm run dev"
+        workdir: "backend"
+        port: 8080
+        logfile: "logs/backend.log"
+        dependencies:
+          - database
+        healthcheck:
+          type: http
+          endpoint: "http://localhost:8080/health"
+          timeout: 20s
+        environment:
+          NODE_ENV: development
+          PORT: "8080"
+
+      # Database (PostgreSQL in Docker)
+      - name: database
+        type: process
+        command: "docker run --rm -p 5432:5432 -e POSTGRES_PASSWORD=devpass postgres:15"
+        port: 5432
+        healthcheck:
+          type: tcp
+          endpoint: "localhost:5432"
+          timeout: 30s
+
+    modes:
+      # Development mode
+      default:
+        name: "Development"
+        description: "Full stack with database"
+        services:
+          - database
+          - backend
+          - frontend
+
+      # Frontend only mode (for UI work)
+      frontend-only:
+        name: "Frontend Only"
+        description: "Just the frontend with mocked API"
+        services:
+          - frontend
+        overrides:
+          - service: frontend
+            environment:
+              VITE_API_URL: "https://mockapi.example.com"
+
+      # Backend only mode (for API work)
+      backend-only:
+        name: "Backend Only"
+        description: "Backend and database only"
+        services:
+          - database
+          - backend
+
+    hooks:
+      pre_start:
+        - "mkdir -p logs"
+
+      post_start:
+        - "echo 'Visit: http://localhost:3000'"

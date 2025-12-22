@@ -1,0 +1,283 @@
+# Complete Engineering Supervisor Agent Configuration
+# Includes install and setup automation
+
+version: "1.0"
+
+apps:
+  engineering-supervisor:
+    name: "Engineering Supervisor Agent"
+    description: "Full-stack application with automated setup"
+    workdir: "/Users/everton.jesus/workspace/projects/gilead/engineering-supervisor-agent/Container"
+
+    # Installation configuration
+    install:
+      dependencies:
+        - name: "Python 3.12+"
+          type: brew
+          package: python@3.12
+          check: "python3.12 --version"
+
+        - name: "Node.js 18+"
+          type: brew
+          package: node
+          check: "node --version | grep -E 'v1[89]|v[2-9][0-9]'"
+
+        - name: "tmux"
+          type: brew
+          package: tmux
+          check: "tmux -V"
+
+        - name: "Caddy"
+          type: brew
+          package: caddy
+          check: "caddy version"
+
+        - name: "OpenSSL"
+          type: brew
+          package: openssl
+          check: "openssl version"
+          optional: true
+
+      steps:
+        - name: "Install UI dependencies"
+          description: "Install Node.js packages for the UI"
+          workdir: "ui"
+          commands:
+            - "npm install"
+          skip_if: "[ -d node_modules ]"
+
+        - name: "Create Python virtual environment"
+          description: "Set up Python virtual environment"
+          workdir: "service"
+          commands:
+            - "python3.12 -m venv venv"
+          skip_if: "[ -d venv ]"
+
+        - name: "Install Python dependencies"
+          description: "Install Python packages"
+          workdir: "service"
+          commands:
+            - "source venv/bin/activate && pip install -r requirements.txt -r requirements-test.txt"
+
+    # Environment setup configuration
+    setup:
+      directories:
+        - "logs"
+        - "tmp"
+        - "data"
+
+      env_vars:
+        # SAML Configuration
+        - name: "SAML_ENTITY_ID"
+          description: "SAML Entity ID"
+          default: "https://localhost:3000"
+
+        - name: "SAML_META_DATA"
+          description: "SAML metadata XML content (read from file)"
+          generate: "cat ../../projects/gilead/engineering-supervisor-agent/Container/saml.xml 2>/dev/null || echo ''"
+
+        - name: "HTTPS_ACS_URL"
+          description: "HTTPS ACS callback URL"
+          default: "https://localhost:3000/api/sso/saml"
+
+        - name: "ACS_URL"
+          description: "ACS callback URL"
+          default: "https://localhost:3000/api/sso/saml"
+
+        # Application Configuration
+        - name: "APP_ENV"
+          description: "Application environment"
+          default: "LOCAL"
+
+        - name: "FRONTEND_URL"
+          description: "Frontend URL"
+          default: "https://localhost:3000/chat"
+
+        - name: "JWT_SECRET_KEY"
+          description: "Secret key for JWT tokens"
+          default: "OF0Fcvi9A+3ax38YOwphzVqyT8Q9/HyogAJIyK20iJI="
+
+        - name: "PROJECT_ROOT"
+          description: "Project root directory"
+          default: "/Users/everton.jesus/workspace/projects/gilead/engineering-supervisor-agent"
+
+        - name: "ENABLE_JSON_LOGS"
+          description: "Enable JSON formatted logs"
+          default: "False"
+
+        # Databricks Configuration
+        - name: "DATABRICKS_AUTH_KEY"
+          description: "Databricks authentication key"
+          default: "dapi1a45f4cc617495ece420ac93f1996453"
+
+        - name: "DATABRICKS_CLIENT_ID"
+          description: "Databricks OAuth client ID"
+          default: "d82f4157-96be-4482-854e-b8c53e79c1c5"
+
+        - name: "DATABRICKS_CLIENT_SECRET"
+          description: "Databricks OAuth client secret"
+          default: "dose9c46c970c6e38591dd680af42623700c"
+
+        - name: "DATABRICKS_TOKEN_ENCRYPTION_KEY"
+          description: "Encryption key for Databricks tokens"
+          default: "4ZYJ0cVvXQGZnF5d0Chr4JZycLXd61f53Rtx4vGP3ew="
+
+        - name: "AGENT_SUPERVISOR_ENDPOINT"
+          description: "Databricks agent supervisor endpoint"
+          default: "https://dbc-03f083b6-1350.cloud.databricks.com/serving-endpoints/supervisor-agent-supervisor-agent-v1-2-ai-gateway"
+
+        - name: "DATABRICKS_HOST"
+          description: "Databricks host URL"
+          default: "https://dbc-03f083b6-1350.cloud.databricks.com"
+
+        - name: "DATABRICKS_TOKEN"
+          description: "Databricks access token"
+          default: "dapi1a45f4cc617495ece420ac93f1996453"
+
+        - name: "DATABRICKS_SQL_HTTP_PATH"
+          description: "Databricks SQL HTTP path"
+          default: "/sql/1.0/warehouses/4e3170e76b1ac84d"
+
+        - name: "DATABRICKS_SQL_HOST"
+          description: "Databricks SQL host URL"
+          default: "https://dbc-03f083b6-1350.cloud.databricks.com"
+
+        - name: "UNITY_CATALOG_NAME"
+          description: "Unity Catalog name"
+          default: "engineering-supervisor-agent-dev"
+
+        - name: "UNITY_SCHEMA_NAME"
+          description: "Unity Schema name"
+          default: "local_test_as_2"
+
+        # Session Configuration
+        - name: "SESSION_SECRET"
+          description: "Session secret key"
+          default: "verylongsecretkeythatshouldbechanged"
+
+        # Okta SSO Configuration
+        - name: "OKTA_ISSUER"
+          description: "Okta issuer URL"
+          default: "https://trial-2738986.okta.com"
+
+        - name: "OKTA_CLIENT_ID"
+          description: "Okta OAuth client ID"
+          default: "0oasfzuttoZacz0Ec697"
+
+        - name: "OKTA_CLIENT_SECRET"
+          description: "Okta OAuth client secret"
+          default: "sJPdnHovsO9iaMOTVrIT1SNPzAEizI2JZrrclv878gTHGX_PuI65CGLdwgwtWcD8"
+
+        - name: "REDIRECT_URI"
+          description: "OAuth redirect URI"
+          default: "https://localhost:3000/api/sso/okta"
+
+        # Sample Databricks Token (for testing)
+        - name: "SAMPLE_DATABRICKS_ACCESS_TOKEN"
+          description: "Sample Databricks access token for testing"
+          default: "{\"access_token\": \"eyJraWQiOiJkZmJjOWVmMThjZTQ2ZTlhMDg2NWZmYzlkODkxYzJmMjg2NmFjMDM3MWZiNDlmOTdhMDg1MzBjNWYyODU3ZTg4IiwidHlwIjoiYXQrand0IiwiYWxnIjoiUlMyNTYifQ.eyJjbGllbnRfaWQiOiJkYXRhYnJpY2tzLWZlZGVyYXRpb24iLCJzY29wZSI6ImFsbC1hcGlzIiwiaXNzIjoiaHR0cHM6Ly9kYmMtMDNmMDgzYjYtMTM1MC5jbG91ZC5kYXRhYnJpY2tzLmNvbS9vaWRjIiwiYXVkIjoiNTAxMjk4NDgzMDIzOTkwIiwic3ViIjoiYW5rdXNoLnNpbmdoMTE3QGdpbGVhZC5jb20iLCJpYXQiOjE3NTYyMTA4NTMsImV4cCI6MTc1NjIxNDQ0NywianRpIjoiYTcyY2MwM2YtM2Y2Yi00N2UxLWJjMWEtZDk1OTlmZjU2MWUyIn0.f7ZbWHEj_vMKNZUmyAJpUfjifkfqZvFCC3UU35YxiW7eyGBgmnjvHrNJa-GQ9d-4NSViXHZBsNNT6Yr_9AP6hyfoVtvi-uxoJidP-9X6nrQ4L6-tUCQYRUPwoqm0n2LFxVN9I_SB7RmrnSiPnxeXmBmKbD5raXUxHY0pWhpPQGhLfWNCKbWNXTk00gnp9N7LQo7y9jeEq5XRJF4WoJg-HMZmpAr5VMKUnj09h42lhVXm1WDP2IOn0bnbGHIa4iEBfxRbDsq0hAp6dzAAS7gr5OUQkbtE4jpPcOVzYcO9-W-FWZbfuI9CF-Zj_zWVUiN_Pn6tHSgGomcix07IWTZAiw\", \"issued_token_type\": \"urn:ietf:params:oauth:token-type:access_token\", \"scope\": \"all-apis\", \"token_type\": \"Bearer\", \"expires_in\": 3593}"
+
+        - name: "INFRA_BASE_URL"
+          description: "Infrastructure base URL"
+          default: "http://localhost:3000"
+
+        # Development Configuration
+        - name: "NODE_ENV"
+          description: "Node environment"
+          default: "development"
+
+        - name: "LOG_LEVEL"
+          description: "Logging level"
+          default: "INFO"
+
+      scripts:
+        - "echo 'Environment setup complete'"
+
+      checks:
+        - name: "Python virtual environment exists"
+          command: "[ -d service/venv ]"
+          message: "Python virtual environment not found"
+
+        - name: "Node modules installed"
+          command: "[ -d ui/node_modules ]"
+          message: "Node modules not installed"
+
+        - name: "Environment file exists"
+          command: "[ -f .env ]"
+          message: "Environment file not created"
+
+    # Services configuration
+    services:
+      - name: ui
+        type: process
+        command: "cd ui && npm run start"
+        workdir: "."
+        port: 3006
+        logfile: "logs/ui.log"
+        environment:
+          NODE_ENV: development
+
+      - name: caddy
+        type: process
+        command: "cd service && caddy run --config Caddyfile"
+        workdir: "."
+        port: 3000
+        logfile: "logs/caddy.log"
+        dependencies:
+          - ui
+
+      - name: mock-backend
+        type: process
+        command: "cd ui && npm run mock"
+        workdir: "."
+        port: 8000
+        logfile: "logs/service.log"
+
+      - name: python-backend
+        type: process
+        command: |
+          cd service && \
+          source venv/bin/activate && \
+          source ../.env 2>/dev/null || true && \
+          export PYTHONPATH=src:tests && \
+          pip install -r requirements-test.txt -r requirements-test.txt && \
+          python3.12 tests/testbotofbots/localmock/main.py
+        workdir: "."
+        port: 8000
+        logfile: "logs/service.log"
+
+    # Running modes
+    modes:
+      default:
+        name: "Mock Backend"
+        services:
+          - ui
+          - caddy
+          - mock-backend
+
+      py:
+        name: "Python Backend"
+        services:
+          - ui
+          - caddy
+          - python-backend
+
+    # Lifecycle hooks
+    hooks:
+      pre_install:
+        - "echo 'Starting installation...'"
+
+      post_install:
+        - "echo 'Installation complete! Run: devup setup'"
+
+      pre_setup:
+        - "echo 'Setting up environment...'"
+
+      post_setup:
+        - "echo 'Setup complete! Run: devup start'"
+
+      pre_start:
+        - "mkdir -p logs"
+
+      post_start:
+        - "echo 'Application started! Visit https://localhost:3006'"

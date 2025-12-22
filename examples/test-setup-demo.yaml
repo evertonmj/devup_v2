@@ -1,0 +1,45 @@
+project:
+  name: "Setup Demo"
+  root: "."
+
+apps:
+  demo:
+    description: "Demo app to show setup working"
+
+    setup:
+      directories:
+        - "demo-logs"
+        - "demo-data"
+
+      env_vars:
+        - name: "DEMO_SECRET"
+          generate: "openssl rand -hex 16"
+          description: "Demo secret key"
+
+        - name: "DEMO_TIMESTAMP"
+          generate: "date +%s"
+          description: "Setup timestamp"
+
+        - name: "DEMO_MODE"
+          default: "development"
+          description: "Running mode"
+
+      scripts:
+        - name: "Create demo file"
+          commands:
+            - "echo 'Setup completed at: '$(date) > demo-logs/setup.log"
+
+      checks:
+        - name: "Verify directories"
+          command: "test -d demo-logs && test -d demo-data"
+          description: "Check that directories were created"
+
+        - name: "Verify env file"
+          command: "test -f .env"
+          description: "Check that .env file exists"
+
+    services:
+      demo:
+        type: process
+        command: "echo 'Demo service running'"
+        workdir: "."
