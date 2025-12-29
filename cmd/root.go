@@ -31,7 +31,7 @@ Features:
   • Health checks and dependency management
   • Lifecycle hooks for custom automation
   • Extensible plugin-like architecture`,
-	Version: "1.1.39",
+	Version: "1.1.41",
 }
 
 // Execute runs the root command

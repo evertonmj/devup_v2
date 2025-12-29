@@ -300,7 +300,7 @@ devup stop
 |----------|-------------|
 | [README.md](README.md) | Updated with install/setup sections |
 | [INSTALL_SETUP_GUIDE.md](INSTALL_SETUP_GUIDE.md) | Comprehensive guide for install & setup |
-| [examples/engineering-supervisor-full.yaml](examples/engineering-supervisor-full.yaml) | Complete example with install/setup |
+| [examples/devup.yaml](examples/devup.yaml) | Complete template with install/setup |
 | [QUICKSTART.md](QUICKSTART.md) | Quick start guide |
 
 ---
@@ -354,7 +354,7 @@ Potential future additions:
 - `cmd/install.go` - Install command implementation
 - `cmd/setup.go` - Setup command implementation
 - `INSTALL_SETUP_GUIDE.md` - Comprehensive guide
-- `examples/engineering-supervisor-full.yaml` - Full example
+- `examples/devup.yaml` - Full template example
 - `FEATURE_SUMMARY.md` - This file
 
 ### Modified Files
@@ -380,7 +380,7 @@ make -f Makefile.devup build
 ./build/devup setup --help
 
 # Test with example config
-./build/devup list -c examples/engineering-supervisor-full.yaml
+./build/devup list -c examples/devup.yaml
 ```
 
 ---
