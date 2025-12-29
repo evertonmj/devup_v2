@@ -101,11 +101,11 @@ cd /tmp
 devup start -c /custom/path/devup.yaml  # Uses specified file
 ```
 
-### Example 4: Engineering Supervisor Agent
+### Example 4: Your Project
 
 ```bash
 # Add to ~/.zshrc
-export DEVUP_DEFAULT_PROJECT="/Users/everton.jesus/workspace/projects/gilead/engineering-supervisor-agent/Container"
+export DEVUP_DEFAULT_PROJECT="/path/to/your/project"
 
 # Now you can run from anywhere:
 devup start                    # Uses DEVUP_DEFAULT_PROJECT

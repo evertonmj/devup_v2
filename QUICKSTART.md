@@ -12,25 +12,26 @@ make -f Makefile.devup build
 make -f Makefile.devup install
 
 # Verify installation
-./build/devup --version
+devup --version
 ```
 
-## One-Time Setup: Use Any Project From Anywhere
+## One-Time Setup (Optional)
 
-You can set a default project directory once and then run devup commands from anywhere without flags or environment variables.
+Set a default project directory to run devup commands from anywhere:
 
 ```bash
-# Set your default project (must contain devup.yaml)
-devup project set /absolute/path/to/your/project
+# Option 1: Using devup command (recommended)
+devup project set /path/to/your/project
+
+# Option 2: Using environment variable
+export DEVUP_DEFAULT_PROJECT="/path/to/your/project"
+# Add to ~/.zshrc or ~/.bashrc for persistence
 
 # Verify the setting
 devup project show
-
-# Clear the saved default (optional)
-devup project clear
 ```
 
-After setting, you can simply run:
+After setting, you can run devup commands from anywhere:
 
 ```bash
 devup start
@@ -39,7 +40,7 @@ devup install
 devup setup
 ```
 
-Priority order (highest to lowest): `-c` flag, `-l` flag, `DEVUP_DEFAULT_PROJECT` env var, saved default project, local search.
+**Priority order**: `-c` flag > `-l` flag > saved project > `DEVUP_DEFAULT_PROJECT` env var > local search
 
 ## Your First Configuration
 
@@ -78,36 +79,265 @@ apps:
 mkdir -p logs
 
 # List available apps
-./build/devup list
+devup list
 
 # Start your app
-./build/devup start
+devup start
 
 # Check status
-./build/devup status
+devup status
 
 # Stop your app
-./build/devup stop
+devup stop
 ```
 
 ## Next Steps
 
-1. **Add more services**: Add backend, database, etc.
-2. **Create modes**: Define dev, staging, production modes
-3. **Set up dependencies**: Configure service start order
-4. **Add health checks**: Ensure services are ready
-5. **Use hooks**: Automate setup/teardown tasks
+### 1. Add More Services
 
-See [README.md](README.md) for detailed documentation!
+```yaml
+services:
+  - name: database
+    command: "docker run --rm -p 5432:5432 postgres:15"
+    port: 5432
 
-## Migrating Your Existing Setup
+  - name: backend
+    command: "npm start"
+    port: 8080
+    dependencies:
+      - database  # Backend waits for database
 
-If you have shell scripts or Makefile:
+  - name: frontend
+    command: "npm run dev"
+    port: 3000
+    dependencies:
+      - backend  # Frontend waits for backend
+```
 
-1. Identify each service/process
-2. Extract start commands
-3. Define ports and dependencies
-4. Add health checks
-5. Create modes for different scenarios
+### 2. Create Different Modes
 
-Check [examples/engineering-supervisor.yaml](examples/engineering-supervisor.yaml) for a real-world migration example!
+```yaml
+modes:
+  development:
+    name: "Development"
+    services: [database, backend, frontend]
+
+  frontend-only:
+    name: "Frontend Only"
+    services: [frontend]
+    overrides:
+      - service: frontend
+        environment:
+          API_URL: "https://staging.api.example.com"
+
+  production:
+    name: "Production"
+    services: [database, backend, frontend]
+    overrides:
+      - service: backend
+        command: "npm run start:prod"
+```
+
+### 3. Add Installation & Setup
+
+```yaml
+install:
+  dependencies:
+    - name: "Node.js"
+      type: brew
+      package: node
+      check: "node --version"
+
+  steps:
+    - name: "Install dependencies"
+      commands:
+        - "npm install"
+      skip_if: "[ -d node_modules ]"
+
+setup:
+  directories:
+    - "logs"
+    - "tmp"
+
+  env_vars:
+    - name: "SECRET_KEY"
+      generate: "openssl rand -hex 32"
+      required: true
+
+    - name: "DATABASE_URL"
+      prompt: true
+      default: "postgresql://localhost/mydb"
+```
+
+Then run:
+
+```bash
+devup install  # Install dependencies
+devup setup    # Setup environment
+devup start    # Start services
+```
+
+### 4. Add Lifecycle Hooks
+
+```yaml
+hooks:
+  pre_start:
+    - "mkdir -p logs data tmp"
+
+  post_start:
+    - "echo 'Application started!'"
+    - "echo 'Visit: http://localhost:3000'"
+
+  pre_stop:
+    - "echo 'Stopping application...'"
+
+  post_stop:
+    - "echo 'Application stopped.'"
+```
+
+## Explore Examples
+
+Check out the [examples/](examples/) directory for:
+
+- **[simple-webapp.yaml](examples/simple-webapp.yaml)** - Basic full-stack app
+- **[devup.yaml](examples/devup.yaml)** - Comprehensive starter template
+- **[install-demo.yaml](examples/install-demo.yaml)** - Dependency installation demo
+- **[test-setup-demo.yaml](examples/test-setup-demo.yaml)** - Environment setup demo
+- **[demo-test.yaml](examples/demo-test.yaml)** - Minimal testing example
+
+See [examples/README.md](examples/README.md) for detailed descriptions.
+
+## Common Commands
+
+```bash
+# List applications
+devup list
+
+# Start services
+devup start
+devup start -a my-app                    # Specific app
+devup start --mode production            # Specific mode
+devup start -c /path/to/config.yaml      # Custom config
+
+# Manage services
+devup status                             # Check status
+devup stop                               # Stop services
+
+# Installation & setup
+devup install                            # Install dependencies
+devup install --dry-run                  # Preview installation
+devup setup                              # Setup environment
+devup setup --use-defaults               # No prompts
+
+# Project management
+devup project set /path/to/project       # Set default project
+devup project show                       # Show current project
+devup project clear                      # Clear default
+
+# Get help
+devup --help
+devup start --help
+```
+
+## Configuration Priority
+
+DevUp looks for configuration in this order:
+
+1. `-c /path/to/config.yaml` (explicit path, highest priority)
+2. `-l` flag (forces local directory search)
+3. Saved default project (`devup project set`)
+4. `DEVUP_DEFAULT_PROJECT` environment variable
+5. Local search paths (current directory, `.devup.yaml`, `config/devup.yaml`, etc.)
+
+## Migrating from Makefile/Scripts
+
+If you have an existing Makefile or shell scripts:
+
+1. **Identify services**: Each `make start-*` target becomes a service
+2. **Extract commands**: Shell commands go into `command` fields
+3. **Define dependencies**: Map dependencies between services
+4. **Create modes**: Different start targets become modes
+5. **Add health checks**: Replace manual checks with built-in health checks
+6. **Convert setup**: `make install` becomes `install` configuration
+
+Check out the [examples/](examples/) directory for practical migration examples!
+
+## Tips
+
+### 1. Start Simple
+Begin with one service and gradually add more.
+
+### 2. Use Health Checks
+Always configure health checks to ensure services are ready:
+```yaml
+healthcheck:
+  type: http
+  endpoint: "http://localhost:8080/health"
+```
+
+### 3. Test Incrementally
+After each change, test your configuration:
+```bash
+devup list    # Validate config
+devup start   # Start services
+devup status  # Check status
+```
+
+### 4. Use Verbose Mode
+When debugging:
+```bash
+devup start -v
+```
+
+### 5. Version Control
+Add `devup.yaml` to git:
+```bash
+git add devup.yaml
+git commit -m "Add DevUp configuration"
+```
+
+## Troubleshooting
+
+### Config not found
+```bash
+# Check where devup is looking
+devup list -v
+
+# Set default project
+devup project set /path/to/project
+
+# Or use explicit path
+devup start -c /path/to/devup.yaml
+```
+
+### Services won't start
+```bash
+# Check logs
+tail -f logs/*.log
+
+# Use verbose mode
+devup start -v
+
+# Check status
+devup status
+```
+
+### Port conflicts
+```bash
+# Find what's using the port
+lsof -ti tcp:3000
+
+# Kill it
+kill $(lsof -ti tcp:3000)
+```
+
+## Further Reading
+
+- **[README.md](README.md)** - Complete documentation
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Technical architecture
+- **[examples/](examples/)** - Example configurations
+- **[CHANGELOG.md](CHANGELOG.md)** - Version history
+
+---
+
+**Ready to dive deeper?** Check out the [main README](README.md) for complete documentation!
