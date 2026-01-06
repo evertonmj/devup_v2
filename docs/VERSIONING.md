@@ -22,10 +22,10 @@ Every time you run `make build`, the patch version automatically increments:
 
 ```bash
 # Current version: 1.0.0
-make -f Makefile.devup build
+make build
 # New version: 1.0.1
 
-make -f Makefile.devup build
+make build
 # New version: 1.0.2
 ```
 
@@ -35,13 +35,13 @@ You can manually bump specific version components:
 
 ```bash
 # Bump patch: 1.0.0 → 1.0.1
-make -f Makefile.devup bump-patch
+make bump-patch
 
 # Bump minor: 1.0.0 → 1.1.0
-make -f Makefile.devup bump-minor
+make bump-minor
 
 # Bump major: 1.0.0 → 2.0.0
-make -f Makefile.devup bump-major
+make bump-major
 ```
 
 ### Build Without Bumping
@@ -49,14 +49,14 @@ make -f Makefile.devup bump-major
 If you need to rebuild without incrementing the version:
 
 ```bash
-make -f Makefile.devup build-no-bump
+make build-no-bump
 ```
 
 ## Check Current Version
 
 ```bash
 # Show version from VERSION file
-make -f Makefile.devup version
+make version
 
 # Show version from binary
 ./build/devup --version
@@ -127,7 +127,7 @@ git push origin v1.1.0
 vim cmd/start.go
 
 # Build (auto-bumps patch)
-make -f Makefile.devup build
+make build
 # v1.0.0 → v1.0.1
 
 # Test
@@ -139,17 +139,17 @@ make -f Makefile.devup build
 
 ```bash
 # Before starting new feature
-make -f Makefile.devup bump-minor
+make bump-minor
 # v1.0.5 → v1.1.0
 
 # Develop feature...
 vim cmd/newfeature.go
 
 # Build without bumping (still developing)
-make -f Makefile.devup build-no-bump
+make build-no-bump
 
 # Final build when feature complete
-make -f Makefile.devup build
+make build
 # v1.1.0 → v1.1.1
 ```
 
@@ -157,11 +157,11 @@ make -f Makefile.devup build
 
 ```bash
 # Major refactor or breaking API change
-make -f Makefile.devup bump-major
+make bump-major
 # v1.5.3 → v2.0.0
 
 # Build
-make -f Makefile.devup build
+make build
 # v2.0.0 → v2.0.1
 ```
 
@@ -173,7 +173,7 @@ For regular development, let the automatic patch bumping handle versioning:
 
 ```bash
 # Just build normally
-make -f Makefile.devup build
+make build
 ```
 
 ### 2. Manual Bump for Releases
@@ -182,10 +182,10 @@ Before releasing a new feature or major change:
 
 ```bash
 # New feature
-make -f Makefile.devup bump-minor
+make bump-minor
 
 # Breaking change
-make -f Makefile.devup bump-major
+make bump-major
 ```
 
 ### 3. Tag Releases
@@ -229,8 +229,8 @@ chmod +x scripts/bump-version.sh
 
 ```bash
 # Rebuild completely
-make -f Makefile.devup clean
-make -f Makefile.devup build
+make clean
+make build
 
 # Check version
 ./build/devup --version
@@ -254,14 +254,14 @@ echo "1.2.3" > VERSION
 
 ```bash
 # Version management
-make -f Makefile.devup version        # Show current version
-make -f Makefile.devup bump-patch     # Bump patch (1.0.0 → 1.0.1)
-make -f Makefile.devup bump-minor     # Bump minor (1.0.0 → 1.1.0)
-make -f Makefile.devup bump-major     # Bump major (1.0.0 → 2.0.0)
+make version        # Show current version
+make bump-patch     # Bump patch (1.0.0 → 1.0.1)
+make bump-minor     # Bump minor (1.0.0 → 1.1.0)
+make bump-major     # Bump major (1.0.0 → 2.0.0)
 
 # Building
-make -f Makefile.devup build          # Build with auto-bump
-make -f Makefile.devup build-no-bump  # Build without bump
+make build          # Build with auto-bump
+make build-no-bump  # Build without bump
 
 # Check
 ./build/devup --version               # Show binary version
@@ -275,7 +275,7 @@ cat VERSION                           # Show file version
 ```yaml
 # .github/workflows/build.yml
 - name: Build
-  run: make -f Makefile.devup build-no-bump
+  run: make build-no-bump
 ```
 
 ### Version from Git Tag
@@ -283,7 +283,7 @@ cat VERSION                           # Show file version
 ```bash
 # Use git tag as version
 git describe --tags --always > VERSION
-make -f Makefile.devup build-no-bump
+make build-no-bump
 ```
 
 ## Semantic Versioning Guidelines
@@ -313,7 +313,7 @@ make -f Makefile.devup build-no-bump
 
 ```bash
 # Check current version
-make -f Makefile.devup version
+make version
 ```
 
 Current: **1.1.0**

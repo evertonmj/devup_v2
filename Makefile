@@ -143,9 +143,9 @@ help:
 	@echo ""
 	@echo "Current Version: $(VERSION)"
 	@echo ""
-	@echo "Usage: make -f Makefile.devup <command>"
+	@echo "Usage: make <command>"
 	@echo ""
-	@grep -E '^## ' Makefile.devup | sed 's/## /  /'
+	@grep -E '^## ' Makefile | sed 's/## /  /'
 	@echo ""
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo ""

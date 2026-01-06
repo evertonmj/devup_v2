@@ -46,10 +46,10 @@ git clone https://github.com/everton/devup.git
 cd devup
 
 # Build the binary
-make -f Makefile.devup build
+make build
 
 # Install system-wide (optional)
-make -f Makefile.devup install
+make install
 
 # Verify installation
 devup --version
@@ -326,11 +326,8 @@ devup setup --use-defaults
 | **[docs/QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md)** | Command cheat sheet |
 | **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** | Technical architecture and design decisions |
 | **[docs/CHANGELOG.md](docs/CHANGELOG.md)** | Version history and release notes |
-| **[docs/FEATURE_SUMMARY.md](docs/FEATURE_SUMMARY.md)** | Feature summary for install and setup |
 | **[docs/INSTALL_SETUP_GUIDE.md](docs/INSTALL_SETUP_GUIDE.md)** | Install and setup guide |
-| **[docs/DEVUP_ENV_CONFIG.md](docs/DEVUP_ENV_CONFIG.md)** | Environment configuration guide |
 | **[docs/VERSIONING.md](docs/VERSIONING.md)** | Versioning guide |
-| **[docs/MAKEFILE.md](docs/MAKEFILE.md)** | Makefile usage guide |
 | **[examples/](examples/)** | Example configurations for different use cases |
 
 ### Topic Guides
@@ -338,7 +335,6 @@ devup setup --use-defaults
 - **Configuration**: See examples in [examples/](examples/)
 - **Environment Setup**: Read [docs/QUICKSTART.md](docs/QUICKSTART.md)
 - **Versioning**: See [docs/VERSIONING.md](docs/VERSIONING.md)
-- **Makefile Usage**: See [docs/MAKEFILE.md](docs/MAKEFILE.md) (legacy reference)
 
 ---
 

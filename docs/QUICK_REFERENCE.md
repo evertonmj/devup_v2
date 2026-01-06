@@ -6,10 +6,10 @@ A cheat sheet for common DevUp operations.
 
 ```bash
 # Build DevUp
-make -f Makefile.devup build
+make build
 
 # Install system-wide
-make -f Makefile.devup install
+make install
 
 # Verify installation
 devup --version

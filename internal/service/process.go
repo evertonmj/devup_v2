@@ -15,11 +15,70 @@ import (
 	"devup/internal/config"
 )
 
+// Commander is an interface that abstracts the os/exec.Cmd behavior.
+type Commander interface {
+	Start() error
+	Wait() error
+	Process() *os.Process
+	SysProcAttr() *syscall.SysProcAttr
+	SetSysProcAttr(attr *syscall.SysProcAttr)
+	SetDir(dir string)
+	SetEnv(env []string)
+	SetStdout(stdout io.Writer)
+	SetStderr(stderr io.Writer)
+	Kill() error
+}
+
+// CmdWrapper is a concrete implementation of Commander that wraps os/exec.Cmd.
+type CmdWrapper struct {
+	*exec.Cmd
+}
+
+func (c *CmdWrapper) Process() *os.Process {
+	return c.Cmd.Process
+}
+
+func (c *CmdWrapper) SysProcAttr() *syscall.SysProcAttr {
+	return c.Cmd.SysProcAttr
+}
+
+func (c *CmdWrapper) SetSysProcAttr(attr *syscall.SysProcAttr) {
+	c.Cmd.SysProcAttr = attr
+}
+
+func (c *CmdWrapper) SetDir(dir string) {
+	c.Cmd.Dir = dir
+}
+
+func (c *CmdWrapper) SetEnv(env []string) {
+	c.Cmd.Env = env
+}
+
+func (c *CmdWrapper) SetStdout(stdout io.Writer) {
+	c.Cmd.Stdout = stdout
+}
+
+func (c *CmdWrapper) SetStderr(stderr io.Writer) {
+	c.Cmd.Stderr = stderr
+}
+
+func (c *CmdWrapper) Kill() error {
+	return c.Cmd.Process.Kill()
+}
+
+// newCommand creates a new CmdWrapper.
+// This function acts as a factory for our Commander interface.
+var newCommand = func(ctx context.Context, name string, arg ...string) Commander {
+	return &CmdWrapper{
+		Cmd: exec.CommandContext(ctx, name, arg...),
+	}
+}
+
 // ProcessRunner manages a single process-based service
 type ProcessRunner struct {
 	config    config.Service
 	workDir   string
-	cmd       *exec.Cmd
+	cmd       Commander
 	logFile   *os.File
 	startTime time.Time
 	mu        sync.Mutex
@@ -48,24 +107,24 @@ func (p *ProcessRunner) Start(ctx context.Context) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.cmd != nil && p.cmd.Process != nil {
+	if p.cmd != nil && p.cmd.Process() != nil {
 		return fmt.Errorf("service '%s' is already running", p.config.Name)
 	}
 
 	// Create command
-	cmd := exec.CommandContext(ctx, "bash", "-c", p.config.Command)
-	cmd.Dir = p.workDir
+	cmd := newCommand(ctx, "bash", "-c", p.config.Command)
+	cmd.SetDir(p.workDir)
 
 	// Set environment variables
-	cmd.Env = os.Environ()
+	cmd.SetEnv(os.Environ())
 	for k, v := range p.config.Environment {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
+		cmd.SetEnv(append(os.Environ(), fmt.Sprintf("%s=%s", k, v)))
 	}
 
 	// Create a new process group so we can kill all child processes
-	cmd.SysProcAttr = &syscall.SysProcAttr{
+	cmd.SetSysProcAttr(&syscall.SysProcAttr{
 		Setpgid: true,
-	}
+	})
 
 	// Setup logging
 	if err := p.setupLogging(cmd); err != nil {
@@ -99,15 +158,15 @@ func (p *ProcessRunner) Stop(ctx context.Context) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.cmd == nil || p.cmd.Process == nil {
+	if p.cmd == nil || p.cmd.Process() == nil {
 		return nil
 	}
 
 	// Get the process group ID (PGID)
-	pgid, err := syscall.Getpgid(p.cmd.Process.Pid)
+	pgid, err := syscall.Getpgid(p.cmd.Process().Pid)
 	if err != nil {
 		// Process may already be dead, try killing it anyway
-		p.cmd.Process.Kill()
+		p.cmd.Kill()
 		return nil
 	}
 
@@ -154,9 +213,9 @@ func (p *ProcessRunner) Status() ServiceStatus {
 		StartTime: p.startTime,
 	}
 
-	if p.cmd != nil && p.cmd.Process != nil {
+	if p.cmd != nil && p.cmd.Process() != nil {
 		status.Running = true
-		status.PID = p.cmd.Process.Pid
+		status.PID = p.cmd.Process().Pid
 	}
 
 	return status
@@ -201,11 +260,11 @@ func (p *ProcessRunner) Logs() ([]string, error) {
 }
 
 // setupLogging configures output redirection for the process
-func (p *ProcessRunner) setupLogging(cmd *exec.Cmd) error {
+func (p *ProcessRunner) setupLogging(cmd Commander) error {
 	if p.config.LogFile == "" {
 		// No log file, use stdout/stderr
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
+		cmd.SetStdout(os.Stdout)
+		cmd.SetStderr(os.Stderr)
 		return nil
 	}
 
@@ -237,8 +296,8 @@ func (p *ProcessRunner) setupLogging(cmd *exec.Cmd) error {
 
 	// Create multi-writer to write to both file and stdout
 	multiWriter := io.MultiWriter(logFile, os.Stdout)
-	cmd.Stdout = multiWriter
-	cmd.Stderr = multiWriter
+	cmd.SetStdout(multiWriter)
+	cmd.SetStderr(multiWriter)
 
 	return nil
 }
