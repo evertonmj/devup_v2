@@ -69,7 +69,30 @@ go install github.com/yourusername/devup@latest
 
 ## 🚀 Quick Start
 
-### 1. Create Your Configuration
+### Option 1: Auto-Initialize (Recommended ⭐)
+
+If you have an existing project, let DevUp automatically detect your setup:
+
+```bash
+# Navigate to your project
+cd /path/to/your-project
+
+# Auto-generate configuration
+devup init
+
+# Start your services
+devup start
+```
+
+DevUp will intelligently scan your project and create a complete `devup.yaml` with:
+
+- Detected package managers (npm, go, pip, cargo, maven, etc.)
+- Service directories (frontend, backend, api)
+- Environment variables from README and .env.example
+- Ports and commands from documentation
+- Health checks and dependencies
+
+### Option 2: Manual Configuration
 
 Create a `devup.yaml` file in your project root:
 
@@ -248,6 +271,7 @@ healthcheck:
 ### Core Commands
 
 ```bash
+devup init              # Initialize configuration (auto-detect project)
 devup list              # List all applications
 devup start             # Start services
 devup stop              # Stop services
@@ -301,6 +325,9 @@ devup setup --use-defaults
 | Document | Description |
 |----------|-------------|
 | **[QUICKSTART.md](QUICKSTART.md)** | Get up and running in 5 minutes |
+| **[TUTORIAL.md](TUTORIAL.md)** | Comprehensive beginner-friendly guide |
+| **[docs/INIT_COMMAND.md](docs/INIT_COMMAND.md)** | Auto-initialization guide for existing projects |
+| **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** | Command cheat sheet |
 | **[ARCHITECTURE.md](ARCHITECTURE.md)** | Technical architecture and design decisions |
 | **[CHANGELOG.md](CHANGELOG.md)** | Version history and release notes |
 | **[examples/](examples/)** | Example configurations for different use cases |
