@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/yourusername/devup/internal/config"
-	"github.com/yourusername/devup/internal/service"
+	"devup/internal/config"
+	"devup/internal/service"
 )
 
 var statusCmd = &cobra.Command{

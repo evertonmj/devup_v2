@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/yourusername/devup/internal/config"
+	"devup/internal/config"
 )
 
 var (
@@ -69,7 +69,7 @@ func runInstall() error {
 	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
 
 	if dryRun {
-		fmt.Println("🔍 DRY-RUN MODE: No actual changes will be made\n")
+		fmt.Println("🔍 DRY-RUN MODE: No actual changes will be made")
 	}
 
 	// Execute pre-install hooks

@@ -42,14 +42,21 @@ func CheckTCP(host string, port int, timeout time.Duration) error {
 func CheckExec(command string, timeout time.Duration) error {
 	cmd := exec.Command("bash", "-c", command)
 
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("exec health check failed to start: %w", err)
+	}
+
 	done := make(chan error, 1)
 	go func() {
-		done <- cmd.Run()
+		done <- cmd.Wait()
 	}()
 
 	select {
 	case <-time.After(timeout):
-		cmd.Process.Kill()
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
 		return fmt.Errorf("exec health check timed out")
 	case err := <-done:
 		if err != nil {

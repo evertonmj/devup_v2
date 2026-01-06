@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"github.com/yourusername/devup/internal/config"
+	"devup/internal/config"
 )
 
 var (
@@ -69,7 +69,7 @@ func runClean(cmd *cobra.Command, args []string) error {
 	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 
 	if cleanDryRun {
-		fmt.Println("\n🔍 DRY-RUN MODE: No files will be deleted\n")
+		fmt.Println("\n🔍 DRY-RUN MODE: No files will be deleted")
 	}
 
 	// Confirm before cleaning (unless --force or --dry-run)
