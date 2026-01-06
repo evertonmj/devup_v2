@@ -115,6 +115,33 @@ devup --help
 
 Let's create a simple project to understand how DevUp works.
 
+### Quick Start: Auto-Initialize (Recommended)
+
+If you already have a project with a `package.json`, `go.mod`, or similar:
+
+```bash
+# Navigate to your project
+cd /path/to/your-project
+
+# Let DevUp create the configuration automatically
+devup init
+
+# DevUp will:
+# - Detect your project type
+# - Find services
+# - Extract environment variables
+# - Create devup.yaml
+
+# Start your application
+devup start
+```
+
+**Skip to [Understanding the Configuration File](#understanding-the-configuration-file)** if you used `devup init`.
+
+---
+
+### Manual Setup: Create Configuration from Scratch
+
 ### Step 1: Create a Project Directory
 
 ```bash
