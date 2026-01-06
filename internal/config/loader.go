@@ -142,6 +142,36 @@ func (l *Loader) validate(config *AppConfig) error {
 			if service.Command == "" {
 				return fmt.Errorf("app '%s': service '%s' has no command", appName, service.Name)
 			}
+
+			// Validate workdir
+			if service.WorkDir != "" {
+				workdir := filepath.Join(app.WorkDir, service.WorkDir)
+				if _, err := os.Stat(workdir); os.IsNotExist(err) {
+					return fmt.Errorf("app '%s': service '%s' workdir '%s' does not exist", appName, service.Name, workdir)
+				}
+			}
+
+			// Validate healthcheck
+			if service.HealthCheck.Type != "" {
+				switch service.HealthCheck.Type {
+				case "http", "tcp", "exec":
+					// valid types
+				default:
+					return fmt.Errorf("app '%s': service '%s' has invalid healthcheck type '%s'", appName, service.Name, service.HealthCheck.Type)
+				}
+				if service.HealthCheck.Endpoint == "" && service.HealthCheck.Type != "exec" {
+					return fmt.Errorf("app '%s': service '%s' healthcheck endpoint is not set", appName, service.Name)
+				}
+			}
+		}
+
+		// Validate service dependencies
+		for _, service := range app.Services {
+			for _, dep := range service.Dependencies {
+				if !serviceNames[dep] {
+					return fmt.Errorf("app '%s': service '%s' has unknown dependency '%s'", appName, service.Name, dep)
+				}
+			}
 		}
 
 		// Validate modes reference existing services
