@@ -1,8 +1,8 @@
-# Makefile Documentation - Engineering Supervisor Agent
+# Makefile Documentation - DevUp
 
 ## Overview
 
-This document describes how to use the Makefile to simplify local development of the Engineering Supervisor Agent. The Makefile provides convenient commands for managing dependencies, starting/stopping services, running tests, and maintaining the codebase.
+This document describes how to use the Makefile to simplify local development of DevUp. The Makefile provides convenient commands for managing dependencies, starting/stopping services, running tests, and maintaining the codebase.
 
 ## Prerequisites
 
@@ -1324,5 +1324,4 @@ For different environments (dev, test, prod), you can:
 
 ---
 
-**Last Updated:** October 2024
-**Maintainers:** Gilead Engineering Supervisor Agent Team
+**Last Updated:** January 2026
