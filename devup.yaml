@@ -4,32 +4,50 @@
 version: "1.0"
 
 apps:
-  # Example: Legacy project from devup_v2
-  legacy:
-    name: "Legacy Engineering Supervisor"
-    description: "Imported from existing Makefile/shell scripts"
+  # Example: Sample application configuration
+  sample-app:
+    name: "Sample Application"
+    description: "Example application with multiple services"
     workdir: "."
 
     services:
-      - name: ui
+      - name: frontend
         type: process
-        command: "echo 'UI service placeholder'"
+        command: "npm start"
         port: 3000
-        logfile: "logs/ui.log"
+        logfile: "logs/frontend.log"
+        healthcheck:
+          type: http
+          endpoint: "http://localhost:3000"
+          timeout: 30s
+          interval: 5s
+          retries: 6
 
-      - name: backend
+      - name: api
         type: process
-        command: "echo 'Backend service placeholder'"
+        command: "npm run start:api"
         port: 8000
-        logfile: "logs/backend.log"
+        logfile: "logs/api.log"
+        healthcheck:
+          type: http
+          endpoint: "http://localhost:8000/health"
+          timeout: 30s
+          interval: 5s
+          retries: 6
 
     modes:
       default:
         name: "Default Mode"
-        description: "Basic mode"
+        description: "Run all services"
         services:
-          - ui
-          - backend
+          - frontend
+          - api
+
+      frontend-only:
+        name: "Frontend Only"
+        description: "Run only frontend for UI development"
+        services:
+          - frontend
 
 # Add more apps below as needed
 # See examples/ directory for more configuration templates

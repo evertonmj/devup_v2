@@ -1,4 +1,4 @@
-module github.com/yourusername/devup
+module devup
 
 go 1.24.5
 
