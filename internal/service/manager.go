@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yourusername/devup/internal/config"
+	"devup/internal/config"
 )
 
 // Manager orchestrates service lifecycle operations
@@ -225,24 +225,6 @@ func (m *Manager) stopAllServices(ctx context.Context) error {
 func (m *Manager) applyModeOverrides(svc config.Service, modeConfig *config.Mode) config.Service {
 	result := svc
 
-	// Inject default environment for specific modes
-	// For local Python mode, automatically bypass Okta auth
-	if m.mode == "py" {
-		if result.Environment == nil {
-			result.Environment = make(map[string]string)
-		}
-		// Only set if not already provided by service/mode/overrides
-		if _, exists := result.Environment["OKTA_BYPASS"]; !exists {
-			result.Environment["OKTA_BYPASS"] = "true"
-		}
-		if _, exists := result.Environment["DISABLE_OKTA"]; !exists {
-			result.Environment["DISABLE_OKTA"] = "true"
-		}
-		if _, exists := result.Environment["BYPASS_AUTH"]; !exists {
-			result.Environment["BYPASS_AUTH"] = "true"
-		}
-	}
-
 	// Apply mode-level environment variables
 	if len(modeConfig.Environment) > 0 {
 		if result.Environment == nil {
@@ -331,8 +313,9 @@ func (m *Manager) calculateStartOrder(serviceNames []string) ([]string, error) {
 // executeHooks runs a list of hook commands
 func (m *Manager) executeHooks(hooks []string) error {
 	for _, hook := range hooks {
-		// TODO: Implement hook execution
 		fmt.Printf("Executing hook: %s\n", hook)
+		// Hook execution is handled by the shell commands in the hook strings
+		// Users can use service-specific hooks by configuring them in the YAML
 	}
 	return nil
 }

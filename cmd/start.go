@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/yourusername/devup/internal/config"
-	"github.com/yourusername/devup/internal/service"
+	"devup/internal/config"
+	"devup/internal/service"
 )
 
 var (
@@ -106,7 +106,7 @@ func startApplication() error {
 			fmt.Printf("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 		} else {
 			// Follow logs continuously until interrupted (default behavior)
-			fmt.Println("Following logs... Press Ctrl+C to stop\n")
+			fmt.Println("Following logs... Press Ctrl+C to stop")
 
 			// Setup signal handler
 			sigChan := make(chan os.Signal, 1)

@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/yourusername/devup/internal/config"
+	"devup/internal/config"
 )
 
 var (
