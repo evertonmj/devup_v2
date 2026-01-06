@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/yourusername/devup/internal/config"
+	"devup/internal/config"
 )
 
 // ProcessRunner manages a single process-based service

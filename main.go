@@ -1,6 +1,6 @@
 package main
 
-import "github.com/yourusername/devup/cmd"
+import "devup/cmd"
 
 func main() {
 	cmd.Execute()
