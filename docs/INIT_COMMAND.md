@@ -460,8 +460,8 @@ These will be added as services you can integrate.
 
 ## See Also
 
-- [TUTORIAL.md](../TUTORIAL.md) - Complete DevUp tutorial
-- [QUICKSTART.md](../QUICKSTART.md) - 5-minute quick start
+- [TUTORIAL.md](TUTORIAL.md) - Complete DevUp tutorial
+- [QUICKSTART.md](QUICKSTART.md) - 5-minute quick start
 - [examples/](../examples/) - Example configurations
 - [README.md](../README.md) - Main documentation
 

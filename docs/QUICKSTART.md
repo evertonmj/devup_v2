@@ -353,7 +353,7 @@ kill $(lsof -ti tcp:3000)
 
 ## Further Reading
 
-- **[README.md](README.md)** - Complete documentation
+- **[../README.md](../README.md)** - Complete documentation
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Technical architecture
 - **[examples/](examples/)** - Example configurations
 - **[CHANGELOG.md](CHANGELOG.md)** - Version history

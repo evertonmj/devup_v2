@@ -12,7 +12,7 @@ Before using the Makefile commands, ensure you have:
 - Python 3.12+
 - Node.js 18+
 - Caddy web server
-- All environment variables configured (see [README.md](README.md) for details)
+- All environment variables configured (see [../README.md](../README.md) for details)
 
 ## Quick Start
 
@@ -1318,7 +1318,7 @@ For different environments (dev, test, prod), you can:
 
 ## Related Documentation
 
-- [README.md](README.md) - Main setup instructions and environment variables
+- [../README.md](../README.md) - Main setup instructions and environment variables
 - [startup.sh](tools/startup.sh) - Startup script with detailed comments
 - [start_caddy.sh](tools/start_caddy.sh) - Caddy proxy startup script
 

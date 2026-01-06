@@ -605,6 +605,6 @@ After running install and setup:
 4. **Stop when done**: `devup stop`
 
 For more information, see:
-- [README.md](README.md) - Main documentation
+- [../README.md](../README.md) - Main documentation
 - [QUICKSTART.md](QUICKSTART.md) - Quick start guide
 - [examples/](examples/) - Example configurations

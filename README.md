@@ -324,20 +324,25 @@ devup setup --use-defaults
 
 | Document | Description |
 |----------|-------------|
-| **[QUICKSTART.md](QUICKSTART.md)** | Get up and running in 5 minutes |
-| **[TUTORIAL.md](TUTORIAL.md)** | Comprehensive beginner-friendly guide |
+| **[docs/QUICKSTART.md](docs/QUICKSTART.md)** | Get up and running in 5 minutes |
+| **[docs/TUTORIAL.md](docs/TUTORIAL.md)** | Comprehensive beginner-friendly guide |
 | **[docs/INIT_COMMAND.md](docs/INIT_COMMAND.md)** | Auto-initialization guide for existing projects |
-| **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** | Command cheat sheet |
-| **[ARCHITECTURE.md](ARCHITECTURE.md)** | Technical architecture and design decisions |
-| **[CHANGELOG.md](CHANGELOG.md)** | Version history and release notes |
+| **[docs/QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md)** | Command cheat sheet |
+| **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** | Technical architecture and design decisions |
+| **[docs/CHANGELOG.md](docs/CHANGELOG.md)** | Version history and release notes |
+| **[docs/FEATURE_SUMMARY.md](docs/FEATURE_SUMMARY.md)** | Feature summary for install and setup |
+| **[docs/INSTALL_SETUP_GUIDE.md](docs/INSTALL_SETUP_GUIDE.md)** | Install and setup guide |
+| **[docs/DEVUP_ENV_CONFIG.md](docs/DEVUP_ENV_CONFIG.md)** | Environment configuration guide |
+| **[docs/VERSIONING.md](docs/VERSIONING.md)** | Versioning guide |
+| **[docs/MAKEFILE.md](docs/MAKEFILE.md)** | Makefile usage guide |
 | **[examples/](examples/)** | Example configurations for different use cases |
 
 ### Topic Guides
 
 - **Configuration**: See examples in [examples/](examples/)
-- **Environment Setup**: Read [QUICKSTART.md](QUICKSTART.md)
-- **Versioning**: See [VERSIONING.md](VERSIONING.md)
-- **Makefile Usage**: See [MAKEFILE.md](MAKEFILE.md) (legacy reference)
+- **Environment Setup**: Read [docs/QUICKSTART.md](docs/QUICKSTART.md)
+- **Versioning**: See [docs/VERSIONING.md](docs/VERSIONING.md)
+- **Makefile Usage**: See [docs/MAKEFILE.md](docs/MAKEFILE.md) (legacy reference)
 
 ---
 

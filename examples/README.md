@@ -475,16 +475,16 @@ Have a great DevUp configuration? Share it!
 ## Additional Resources
 
 - **Main README**: [../README.md](../README.md)
-- **Quick Start**: [../QUICKSTART.md](../QUICKSTART.md)
-- **Architecture**: [../ARCHITECTURE.md](../ARCHITECTURE.md)
-- **Changelog**: [../CHANGELOG.md](../CHANGELOG.md)
+- **Quick Start**: [../docs/QUICKSTART.md](../docs/QUICKSTART.md)
+- **Architecture**: [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md)
+- **Changelog**: [../docs/CHANGELOG.md](../docs/CHANGELOG.md)
 
 ---
 
 ## Questions or Issues?
 
 - Check the main [README](../README.md) for documentation
-- Review [QUICKSTART.md](../QUICKSTART.md) for getting started
+- Review [docs/QUICKSTART.md](../docs/QUICKSTART.md) for getting started
 - Open an issue on GitHub
 
 ---
