@@ -42,11 +42,7 @@
 
 ## 📦 Installation
 
-### From Source (macOS/Linux)
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/devup.git
+git clone https://github.com/everton/devup.git
 cd devup
 
 # Build the binary
@@ -62,7 +58,7 @@ devup --version
 ### Using Go Install
 
 ```bash
-go install github.com/yourusername/devup@latest
+go install github.com/everton/devup@latest
 ```
 
 ---
@@ -559,34 +555,12 @@ git commit -m "Add DevUp configuration"
 
 ## 🤝 Contributing
 
-Contributions are welcome! Here's how you can help:
+We welcome contributions from the community!
 
-1. **Report Bugs**: Open an issue with details
-2. **Suggest Features**: Share your ideas
-3. **Submit PRs**: Fix bugs or add features
-4. **Improve Docs**: Help make documentation better
+For details on how to contribute, please see our [Contributing Guide](CONTRIBUTING.md).
 
-### Development Setup
+We also have a [Code of Conduct](CODE_OF_CONDUCT.md) that we expect all contributors to adhere to.
 
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/devup.git
-cd devup
-
-# Install dependencies
-go mod download
-
-# Build
-make -f Makefile.devup build
-
-# Run tests
-go test ./...
-
-# Run with example config
-./build/devup start -c examples/simple-webapp.yaml
-```
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for contribution guidelines.
 
 ---
 
@@ -657,6 +631,6 @@ MIT License - see [LICENSE](LICENSE) file for details
 
 **Made with ❤️ for developers who manage complex environments**
 
-[Report Bug](https://github.com/yourusername/devup/issues) · [Request Feature](https://github.com/yourusername/devup/issues) · [Documentation](https://github.com/yourusername/devup/wiki)
+[Report Bug](https://github.com/everton/devup/issues) · [Request Feature](https://github.com/everton/devup/issues) · [Documentation](https://github.com/everton/devup/wiki)
 
 </div>

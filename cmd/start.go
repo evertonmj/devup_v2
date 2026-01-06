@@ -58,7 +58,7 @@ func startApplication() error {
 	// Determine which app to start
 	app, err := getApp(cfg)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get app: %w", err)
 	}
 
 	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
