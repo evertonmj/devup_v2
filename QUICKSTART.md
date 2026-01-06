@@ -44,6 +44,26 @@ devup setup
 
 ## Your First Configuration
 
+### Option 1: Auto-Initialize (Recommended ⭐)
+
+For existing projects with `package.json`, `go.mod`, or similar:
+
+```bash
+cd /path/to/your-project
+devup init --interactive=false
+```
+
+This will automatically:
+
+- Detect your package manager and project type
+- Find service directories (frontend, backend, api)
+- Extract environment variables from README.md and .env.example
+- Generate a complete devup.yaml configuration
+
+See [docs/INIT_COMMAND.md](docs/INIT_COMMAND.md) for full details.
+
+### Option 2: Manual Configuration
+
 Create `devup.yaml` in your project:
 
 ```yaml

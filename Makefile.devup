@@ -37,8 +37,15 @@ bump-minor:
 bump-major:
 	@./scripts/bump-version.sh major
 
-## build: Build the binary (auto-bumps patch version)
+## build: Build the binary without version bump
 build:
+	@echo "Building $(BINARY_NAME) v$(VERSION)..."
+	@mkdir -p $(BUILD_DIR)
+	$(GOBUILD) -ldflags "-s -w" -o $(BUILD_DIR)/$(BINARY_NAME) .
+	@echo "✅ Build complete: $(BUILD_DIR)/$(BINARY_NAME) v$(VERSION)"
+
+## build-release: Build and bump patch version (use for releases)
+build-release:
 	@echo "Bumping version..."
 	@./scripts/bump-version.sh patch
 	@echo ""
@@ -47,13 +54,6 @@ build:
 	mkdir -p $(BUILD_DIR); \
 	$(GOBUILD) -ldflags "-s -w" -o $(BUILD_DIR)/$(BINARY_NAME) .; \
 	echo "✅ Build complete: $(BUILD_DIR)/$(BINARY_NAME) v$$NEW_VERSION"
-
-## build-no-bump: Build without version bump
-build-no-bump:
-	@echo "Building $(BINARY_NAME) v$(VERSION)..."
-	@mkdir -p $(BUILD_DIR)
-	$(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) .
-	@echo "✅ Build complete: $(BUILD_DIR)/$(BINARY_NAME) v$(VERSION)"
 
 ## install: Build and install to system
 install: build
@@ -111,6 +111,6 @@ help:
 	@echo ""
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo ""
-	@echo "Note: 'make build' automatically bumps patch version (1.0.0 → 1.0.1)"
-	@echo "      Use 'make build-no-bump' to build without version change"
+	@echo "Note: 'make build' builds without version change"
+	@echo "      Use 'make build-release' to build and bump version (1.0.0 → 1.0.1)"
 	@echo ""
