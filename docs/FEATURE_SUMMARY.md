@@ -298,7 +298,7 @@ devup stop
 
 | Document | Description |
 |----------|-------------|
-| [README.md](README.md) | Updated with install/setup sections |
+| [../README.md](../README.md) | Updated with install/setup sections |
 | [INSTALL_SETUP_GUIDE.md](INSTALL_SETUP_GUIDE.md) | Comprehensive guide for install & setup |
 | [examples/devup.yaml](examples/devup.yaml) | Complete template with install/setup |
 | [QUICKSTART.md](QUICKSTART.md) | Quick start guide |
