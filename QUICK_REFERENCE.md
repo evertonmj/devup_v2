@@ -15,9 +15,22 @@ make -f Makefile.devup install
 devup --version
 ```
 
+## Quick Start
+
+```bash
+# For existing projects - auto-create config
+devup init
+
+# For new projects - manual config
+# (see Configuration Template below)
+```
+
 ## Basic Commands
 
 ```bash
+# Initialize config (for existing projects)
+devup init
+
 # List all apps in config
 devup list
 
