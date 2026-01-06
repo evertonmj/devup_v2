@@ -6,10 +6,10 @@ Get up and running with DevUp in 5 minutes!
 
 ```bash
 # Build from source
-make -f Makefile.devup build
+make build
 
 # Install to system (optional)
-make -f Makefile.devup install
+make install
 
 # Verify installation
 devup --version

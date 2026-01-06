@@ -20,7 +20,7 @@ Before running these examples, ensure you have:
 1. **DevUp installed**:
    ```bash
    cd ..
-   make -f Makefile.devup build
+   make build
    ./build/devup --version
    ```
 

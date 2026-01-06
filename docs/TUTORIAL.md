@@ -85,7 +85,7 @@ cd /path/to/devup_v2
 
 ```bash
 # Build the devup binary
-make -f Makefile.devup build
+make build
 
 # This creates a binary at: build/devup
 ```
@@ -94,7 +94,7 @@ make -f Makefile.devup build
 
 ```bash
 # Install devup to /usr/local/bin so you can use it from anywhere
-make -f Makefile.devup install
+make install
 
 # Now you can run 'devup' from any directory
 devup --version
@@ -864,7 +864,6 @@ Now that you understand the basics, explore:
 2. **Advanced Documentation**:
    - [ARCHITECTURE.md](ARCHITECTURE.md) - How DevUp works internally
    - [INSTALL_SETUP_GUIDE.md](INSTALL_SETUP_GUIDE.md) - Dependency installation
-   - [FEATURE_SUMMARY.md](FEATURE_SUMMARY.md) - All features overview
 
 3. **Create Your Own Project**:
    - Take an existing project
