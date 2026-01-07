@@ -48,7 +48,7 @@ GOMOD=$(GOCMD) mod
 # -s: Omit the symbol table and debug information.
 # -w: Omit the DWARF symbol table.
 # -X: Set the value of a string variable in the application.
-LDFLAGS=-ldflags "-s -w -X 'github.com/everton/devup/cmd.Version=$(VERSION)'"
+LDFLAGS=-ldflags "-s -w -X 'github.com/evertonmj/devup_v2/cmd.Version=$(VERSION)'"
 
 all: test build
 
