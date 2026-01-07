@@ -58,7 +58,7 @@ func stopApplication() error {
 
 	// Clean ports after stopping to ensure everything is killed
 	fmt.Println("🧹 Cleaning ports...")
-	ports := collectPortsFromApp(app)
+	ports := collectPorts(app)
 	if len(ports) > 0 {
 		for _, port := range ports {
 			if err := service.CleanPort(port); err != nil {
@@ -75,17 +75,3 @@ func stopApplication() error {
 	return nil
 }
 
-// collectPortsFromApp collects all ports used by services in the app
-func collectPortsFromApp(app *config.AppSpec) []int {
-	ports := []int{}
-	seen := make(map[int]bool)
-
-	for _, service := range app.Services {
-		if service.Port > 0 && !seen[service.Port] {
-			ports = append(ports, service.Port)
-			seen[service.Port] = true
-		}
-	}
-
-	return ports
-}

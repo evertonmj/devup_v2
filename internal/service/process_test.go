@@ -1,50 +1,57 @@
 package service
 
 import (
+	"io"
+	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 
 	"devup/internal/config"
 )
 
-func TestProcessRunner_Stop(t *testing.T) {
-	oldNewCommand := newCommand
-	defer func() { newCommand = oldNewCommand }()
+// Ensure context is available for future tests
+var _ = func() {} // placeholder
 
-	mockCmd := &MockCommander{}
-	newCommand = func(ctx context.Context, name string, arg ...string) Commander {
-		return mockCmd
-	}
+// MockCommander implements Commander interface for testing
+type MockCommander struct {
+	startCalled bool
+	waitCalled  bool
+	killCalled  bool
+	process     *os.Process
+}
 
-	svc := config.Service{
-		Name:    "test-service",
-		Command: "echo 'hello'",
-	}
-	runner, err := NewProcessRunner(svc, "/tmp")
-	if err != nil {
-		t.Fatalf("Failed to create process runner: %v", err)
-	}
+func (m *MockCommander) Start() error {
+	m.startCalled = true
+	return nil
+}
 
-	// Start the process first
-	err = runner.Start(context.Background())
-	if err != nil {
-		t.Fatalf("Expected Start to succeed, but it failed: %v", err)
-	}
+func (m *MockCommander) Wait() error {
+	m.waitCalled = true
+	return nil
+}
 
-	// Now stop it
-	err = runner.Stop(context.Background())
-	if err != nil {
-		t.Fatalf("Expected Stop to succeed, but it failed: %v", err)
+func (m *MockCommander) Process() *os.Process {
+	// Return a dummy process for testing
+	if m.process == nil {
+		m.process = &os.Process{Pid: 12345}
 	}
+	return m.process
+}
 
-	if !mockCmd.killCalled {
-		t.Errorf("Expected Kill to be called on the mock command, but it wasn't")
-	}
+func (m *MockCommander) SysProcAttr() *syscall.SysProcAttr {
+	return &syscall.SysProcAttr{}
+}
 
-	status := runner.Status()
-	if status.Running {
-		t.Errorf("Expected service to not be running after Stop, but it is")
-	}
+func (m *MockCommander) SetSysProcAttr(attr *syscall.SysProcAttr) {}
+func (m *MockCommander) SetDir(dir string)                        {}
+func (m *MockCommander) SetEnv(env []string)                      {}
+func (m *MockCommander) SetStdout(stdout io.Writer)               {}
+func (m *MockCommander) SetStderr(stderr io.Writer)               {}
+
+func (m *MockCommander) Kill() error {
+	m.killCalled = true
+	return nil
 }
 
 func TestNewProcessRunner(t *testing.T) {

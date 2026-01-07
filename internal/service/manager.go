@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
 	"sync"
 	"time"
 
@@ -11,12 +13,11 @@ import (
 
 // Manager orchestrates service lifecycle operations
 type Manager struct {
-	app         *config.AppSpec
-	mode        string
-	services    map[string]ServiceRunner
-	state       *config.RuntimeState
-	processPool *ProcessPool
-	mu          sync.RWMutex
+	app      *config.AppSpec
+	mode     string
+	services map[string]ServiceRunner
+	state    *config.RuntimeState
+	mu       sync.RWMutex
 }
 
 // ServiceRunner interface that all service types must implement
@@ -40,10 +41,9 @@ type ServiceStatus struct {
 // NewManager creates a new service manager for an app
 func NewManager(app *config.AppSpec, mode string) *Manager {
 	return &Manager{
-		app:         app,
-		mode:        mode,
-		services:    make(map[string]ServiceRunner),
-		processPool: NewProcessPool(),
+		app:      app,
+		mode:     mode,
+		services: make(map[string]ServiceRunner),
 		state: &config.RuntimeState{
 			AppName:   app.Name,
 			Mode:      mode,
@@ -314,8 +314,13 @@ func (m *Manager) calculateStartOrder(serviceNames []string) ([]string, error) {
 func (m *Manager) executeHooks(hooks []string) error {
 	for _, hook := range hooks {
 		fmt.Printf("Executing hook: %s\n", hook)
-		// Hook execution is handled by the shell commands in the hook strings
-		// Users can use service-specific hooks by configuring them in the YAML
+		cmd := exec.Command("bash", "-c", hook)
+		cmd.Dir = m.app.WorkDir
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("hook failed: %s: %w", hook, err)
+		}
 	}
 	return nil
 }

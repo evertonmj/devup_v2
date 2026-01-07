@@ -172,8 +172,35 @@ func runSetup() error {
 	return nil
 }
 
+// validatePath ensures the path doesn't escape the base directory (prevents path traversal)
+func validatePath(basePath, targetPath string) error {
+	// Clean and resolve both paths
+	absBase, err := filepath.Abs(basePath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve base path: %w", err)
+	}
+
+	fullPath := filepath.Join(absBase, targetPath)
+	absTarget, err := filepath.Abs(fullPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve target path: %w", err)
+	}
+
+	// Ensure the target is within the base directory
+	if !strings.HasPrefix(absTarget, absBase+string(filepath.Separator)) && absTarget != absBase {
+		return fmt.Errorf("path traversal detected: %s escapes base directory %s", targetPath, basePath)
+	}
+
+	return nil
+}
+
 func createDirectories(app *config.AppSpec, isDryRun bool) error {
 	for _, dir := range app.Setup.Directories {
+		// Validate path to prevent directory traversal
+		if err := validatePath(app.WorkDir, dir); err != nil {
+			return err
+		}
+
 		fullPath := filepath.Join(app.WorkDir, dir)
 
 		if isDryRun {
@@ -194,6 +221,11 @@ func createDirectories(app *config.AppSpec, isDryRun bool) error {
 
 func createFiles(app *config.AppSpec, isDryRun bool) error {
 	for _, file := range app.Setup.Files {
+		// Validate path to prevent directory traversal
+		if err := validatePath(app.WorkDir, file.Path); err != nil {
+			return err
+		}
+
 		fullPath := filepath.Join(app.WorkDir, file.Path)
 
 		if isDryRun {
@@ -399,7 +431,8 @@ func loadEnvFile(path string) (map[string]string, error) {
 }
 
 func writeEnvFile(path string, vars map[string]string) error {
-	file, err := os.Create(path)
+	// Create file with restricted permissions (0600) since .env may contain secrets
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
 	}
