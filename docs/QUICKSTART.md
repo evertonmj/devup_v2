@@ -60,7 +60,7 @@ This will automatically:
 - Extract environment variables from README.md and .env.example
 - Generate a complete devup.yaml configuration
 
-See [docs/INIT_COMMAND.md](docs/INIT_COMMAND.md) for full details.
+See [docs/INIT_COMMAND.md](INIT_COMMAND.md) for full details.
 
 ### Option 2: Manual Configuration
 
