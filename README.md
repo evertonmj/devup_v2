@@ -42,7 +42,7 @@
 
 ## 📦 Installation
 
-git clone https://github.com/everton/devup.git
+git clone https://github.com/evertonmj/devup_v2.git
 cd devup
 
 # Build the binary
@@ -58,7 +58,7 @@ devup --version
 ### Using Go Install
 
 ```bash
-go install github.com/everton/devup@latest
+go install github.com/evertonmj/devup_v2@latest
 ```
 
 ---
@@ -627,6 +627,6 @@ MIT License - see [LICENSE](LICENSE) file for details
 
 **Made with ❤️ for developers who manage complex environments**
 
-[Report Bug](https://github.com/everton/devup/issues) · [Request Feature](https://github.com/everton/devup/issues) · [Documentation](https://github.com/everton/devup/wiki)
+[Report Bug](https://github.com/evertonmj/devup_v2/issues) · [Request Feature](https://github.com/evertonmj/devup_v2/issues) · [Documentation](https://github.com/evertonmj/devup_v2/wiki)
 
 </div>

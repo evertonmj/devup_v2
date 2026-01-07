@@ -27,9 +27,9 @@ Pull Requests are the best way to propose changes to the codebase. We actively w
 
 In short, when you submit code changes, your submissions are understood to be under the same [MIT License](http://choosealicense.com/licenses/mit/) that covers the project. Feel free to contact the maintainers if that's a concern.
 
-## Report bugs using Github's [issues](https://github.com/everton/devup/issues)
+## Report bugs using Github's [issues](https://github.com/evertonmj/devup_v2/issues)
 
-We use GitHub Issues to track public bugs. Report a bug by [opening a new issue](https://github.com/everton/devup/issues/new); it's that easy!
+We use GitHub Issues to track public bugs. Report a bug by [opening a new issue](https://github.com/evertonmj/devup_v2/issues/new); it's that easy!
 
 ## Write bug reports with detail, background, and sample code
 

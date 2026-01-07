@@ -95,7 +95,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println("  2. Test your configuration: devup list")
 	fmt.Println("  3. Start your application: devup start")
 	fmt.Println()
-	fmt.Println("📚 For help, see: https://github.com/everton/devup/blob/main/docs/TUTORIAL.md")
+	fmt.Println("📚 For help, see: https://github.com/evertonmj/devup_v2/blob/main/docs/TUTORIAL.md")
 	fmt.Println()
 
 	return nil
