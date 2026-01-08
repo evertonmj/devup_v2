@@ -94,6 +94,26 @@ type Service struct {
 	HealthCheck  HealthCheck       `yaml:"healthcheck,omitempty"`
 	LogFile      string            `yaml:"logfile,omitempty"`
 	Dependencies []string          `yaml:"dependencies,omitempty"` // Service names this depends on
+	Docker       *DockerConfig     `yaml:"docker,omitempty"`       // Docker-specific configuration
+}
+
+// DockerConfig represents Docker container configuration for a service
+type DockerConfig struct {
+	Image         string            `yaml:"image"`                    // Docker image to use
+	Container     string            `yaml:"container,omitempty"`      // Container name (defaults to service name)
+	Ports         []string          `yaml:"ports,omitempty"`          // Port mappings (e.g., "8080:8080", "9000")
+	Volumes       []string          `yaml:"volumes,omitempty"`        // Volume mounts (e.g., "/data:/data")
+	Environment   map[string]string `yaml:"environment,omitempty"`    // Environment variables
+	Networks      []string          `yaml:"networks,omitempty"`       // Docker networks to connect to
+	Pull          bool              `yaml:"pull,omitempty"`           // Always pull image before running
+	Remove        bool              `yaml:"remove,omitempty"`         // Remove container after stop (default: true)
+	RestartPolicy string            `yaml:"restart_policy,omitempty"` // Restart policy: no, always, on-failure, unless-stopped
+	Entrypoint    string            `yaml:"entrypoint,omitempty"`     // Override container entrypoint
+	Cmd           string            `yaml:"cmd,omitempty"`            // Override container command
+	WorkDir       string            `yaml:"working_dir,omitempty"`    // Working directory in container
+	User          string            `yaml:"user,omitempty"`           // User to run container as
+	Privileged    bool              `yaml:"privileged,omitempty"`     // Run container in privileged mode
+	Labels        map[string]string `yaml:"labels,omitempty"`         // Docker labels
 }
 
 // Mode represents different running modes (e.g., mock, python, debug)
