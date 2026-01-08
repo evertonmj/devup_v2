@@ -11,6 +11,15 @@ import (
 	"devup/internal/config"
 )
 
+// Get current working directory at manager creation
+var currentWorkDir = func() string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = "."
+	}
+	return cwd
+}()
+
 // Manager orchestrates service lifecycle operations
 type Manager struct {
 	app      *config.AppSpec
@@ -165,19 +174,31 @@ func (m *Manager) startService(ctx context.Context, serviceName string, modeConf
 	// Apply mode overrides
 	effectiveConfig := m.applyModeOverrides(*serviceConfig, modeConfig)
 
+	// Apply template variable resolution
+	resolver := config.NewTemplateResolver(
+		m.app.Name,
+		m.app.WorkDir,
+		m.app.WorkDir,
+		currentWorkDir,
+	)
+	resolvedService := resolver.ResolveService(&effectiveConfig)
+
 	// Create appropriate service runner based on type
 	var runner ServiceRunner
 	var err error
 
-	switch effectiveConfig.Type {
+	switch resolvedService.Type {
 	case "process", "":
-		runner, err = NewProcessRunner(effectiveConfig, m.app.WorkDir)
+		runner, err = NewProcessRunner(*resolvedService, m.app.WorkDir)
 	case "docker":
-		return fmt.Errorf("docker service type not yet implemented")
+		if resolvedService.Docker == nil {
+			return fmt.Errorf("docker service '%s' requires docker configuration", serviceName)
+		}
+		runner = NewDockerRunner(resolvedService, resolvedService.Docker, currentWorkDir)
 	case "tmux":
 		return fmt.Errorf("tmux service type not yet implemented")
 	default:
-		return fmt.Errorf("unknown service type: %s", effectiveConfig.Type)
+		return fmt.Errorf("unknown service type: %s", resolvedService.Type)
 	}
 
 	if err != nil {
@@ -198,7 +219,7 @@ func (m *Manager) startService(ctx context.Context, serviceName string, modeConf
 		Port:      status.Port,
 		Status:    "running",
 		StartTime: status.StartTime,
-		LogFile:   effectiveConfig.LogFile,
+		LogFile:   resolvedService.LogFile,
 	}
 
 	return nil

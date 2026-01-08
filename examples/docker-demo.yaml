@@ -1,0 +1,110 @@
+version: "1.0"
+
+apps:
+  docker-demo:
+    name: "Docker Demo App"
+    description: "Example application using Docker services"
+    workdir: "."
+    
+    services:
+      - name: "API Server"
+        type: "process"
+        command: "echo 'Starting API on port 8080'"
+        workdir: "."
+        port: 8080
+        environment:
+          PORT: "8080"
+          LOG_LEVEL: "debug"
+        logfile: "logs/api.log"
+        healthcheck:
+          type: "tcp"
+          endpoint: "localhost:8080"
+          timeout: 5s
+          interval: 10s
+          retries: 3
+      
+      - name: "PostgreSQL Database"
+        type: "docker"
+        docker:
+          image: "postgres:15-alpine"
+          container: "devup-postgres"
+          ports:
+            - "5432:5432"
+          volumes:
+            - "postgres_data:/var/lib/postgresql/data"
+          environment:
+            POSTGRES_USER: "devuser"
+            POSTGRES_PASSWORD: "devpass"
+            POSTGRES_DB: "devdb"
+          restart_policy: "unless-stopped"
+          pull: true
+        healthcheck:
+          type: "tcp"
+          endpoint: "localhost:5432"
+          timeout: 5s
+          interval: 10s
+          retries: 5
+      
+      - name: "Redis Cache"
+        type: "docker"
+        docker:
+          image: "redis:7-alpine"
+          container: "devup-redis"
+          ports:
+            - "6379:6379"
+          restart_policy: "unless-stopped"
+          pull: true
+        healthcheck:
+          type: "tcp"
+          endpoint: "localhost:6379"
+          timeout: 5s
+          interval: 10s
+          retries: 3
+      
+      - name: "Frontend UI"
+        type: "docker"
+        port: 3000
+        docker:
+          image: "nginx:alpine"
+          container: "devup-frontend"
+          working_dir: "/app"
+          ports:
+            - "3000:80"
+          environment:
+            NODE_ENV: "development"
+            API_URL: "http://localhost:8080"
+          pull: false
+
+    environment:
+      # Global environment variables with template support
+      PROJECT_NAME: "docker-demo"
+      DATA_DIR: "./data"
+      LOG_DIR: "${CWD}/logs"
+      HOME_CONFIG: "${HOME}/.devup"
+
+    modes:
+      development:
+        name: "Development Mode"
+        description: "Run all services for development"
+        services:
+          - "API Server"
+          - "PostgreSQL Database"
+          - "Redis Cache"
+          - "Frontend UI"
+        environment:
+          LOG_LEVEL: "debug"
+          DEBUG: "true"
+
+      testing:
+        name: "Testing Mode"
+        description: "Run only API and database for testing"
+        services:
+          - "PostgreSQL Database"
+          - "API Server"
+        environment:
+          LOG_LEVEL: "debug"
+
+    health:
+      enabled: true
+      timeout: 30s
+      interval: 5s

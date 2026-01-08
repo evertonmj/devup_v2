@@ -139,7 +139,7 @@ func (l *Loader) validate(config *AppConfig) error {
 			}
 			serviceNames[service.Name] = true
 
-			if service.Command == "" {
+			if service.Command == "" && service.Docker == nil {
 				return fmt.Errorf("app '%s': service '%s' has no command", appName, service.Name)
 			}
 
