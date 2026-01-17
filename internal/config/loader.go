@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -48,6 +49,11 @@ func (l *Loader) Load() (*AppConfig, error) {
 	var config AppConfig
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	// Normalize paths to absolute
+	if err := l.normalizePaths(&config, configPath); err != nil {
+		return nil, fmt.Errorf("failed to normalize paths: %w", err)
 	}
 
 	// Validate
@@ -112,6 +118,70 @@ func (l *Loader) resolveConfigPath() (string, error) {
 	return "", fmt.Errorf("no configuration file found. Searched: %v", searchPaths)
 }
 
+func (l *Loader) normalizePaths(config *AppConfig, configPath string) error {
+	baseDir := filepath.Dir(configPath)
+
+	for appName, app := range config.Apps {
+		workDir := app.WorkDir
+		if workDir == "" {
+			workDir = baseDir
+		}
+
+		absWorkDir, err := resolveAbsPath(baseDir, workDir)
+		if err != nil {
+			return fmt.Errorf("app '%s': failed to resolve workdir '%s': %w", appName, workDir, err)
+		}
+		app.WorkDir = absWorkDir
+
+		for i, svc := range app.Services {
+			if svc.WorkDir != "" {
+				absSvcDir, err := resolveAbsPath(app.WorkDir, svc.WorkDir)
+				if err != nil {
+					return fmt.Errorf("app '%s': service '%s' workdir '%s' is invalid: %w", appName, svc.Name, svc.WorkDir, err)
+				}
+				svc.WorkDir = absSvcDir
+			}
+			app.Services[i] = svc
+		}
+
+		for i, step := range app.Install.Steps {
+			if step.WorkDir != "" {
+				absStepDir, err := resolveAbsPath(app.WorkDir, step.WorkDir)
+				if err != nil {
+					return fmt.Errorf("app '%s': install step '%s' workdir '%s' is invalid: %w", appName, step.Name, step.WorkDir, err)
+				}
+				step.WorkDir = absStepDir
+			}
+			app.Install.Steps[i] = step
+		}
+
+		config.Apps[appName] = app
+	}
+
+	return nil
+}
+
+func resolveAbsPath(baseDir, path string) (string, error) {
+	if path == "" {
+		return filepath.Abs(baseDir)
+	}
+
+	if strings.HasPrefix(path, "~") {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			trimmed := strings.TrimPrefix(path, "~")
+			trimmed = strings.TrimPrefix(trimmed, string(filepath.Separator))
+			path = filepath.Join(home, trimmed)
+		}
+	}
+
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path), nil
+	}
+
+	return filepath.Abs(filepath.Join(baseDir, path))
+}
+
 // validate performs basic validation on the configuration
 func (l *Loader) validate(config *AppConfig) error {
 	if len(config.Apps) == 0 {
@@ -145,7 +215,10 @@ func (l *Loader) validate(config *AppConfig) error {
 
 			// Validate workdir
 			if service.WorkDir != "" {
-				workdir := filepath.Join(app.WorkDir, service.WorkDir)
+				workdir := service.WorkDir
+				if !filepath.IsAbs(workdir) {
+					workdir = filepath.Join(app.WorkDir, workdir)
+				}
 				if _, err := os.Stat(workdir); os.IsNotExist(err) {
 					return fmt.Errorf("app '%s': service '%s' workdir '%s' does not exist", appName, service.Name, workdir)
 				}
