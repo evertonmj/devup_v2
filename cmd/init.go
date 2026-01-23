@@ -776,21 +776,6 @@ func generateConfig(info *ProjectInfo) string {
 						sb.WriteString(fmt.Sprintf("          %s: \"%s\"\n", key, val))
 					}
 				}
-
-				// Add health check for services with ports
-				if svc.Port > 0 {
-					sb.WriteString("        healthcheck:\n")
-					if svc.Type == "web" || svc.Type == "api" {
-						sb.WriteString("          type: http\n")
-						sb.WriteString(fmt.Sprintf("          endpoint: \"http://localhost:%d\"\n", svc.Port))
-					} else {
-						sb.WriteString("          type: tcp\n")
-						sb.WriteString(fmt.Sprintf("          endpoint: \"localhost:%d\"\n", svc.Port))
-					}
-					sb.WriteString("          timeout: 30s\n")
-					sb.WriteString("          interval: 5s\n")
-					sb.WriteString("          retries: 6\n")
-				}
 			}
 
 			sb.WriteString("\n")
