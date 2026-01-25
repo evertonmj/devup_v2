@@ -58,6 +58,20 @@ func (dr *DockerRunner) Start(ctx context.Context) error {
 		return fmt.Errorf("container %s is already running", dr.container)
 	}
 
+	// Check docker availability
+	if _, err := exec.LookPath("docker"); err != nil {
+		return fmt.Errorf("docker is not installed or not in PATH. Please install Docker Desktop and ensure it's running")
+	}
+	// Check docker daemon status with a short timeout
+	{
+		checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+		verCmd := exec.CommandContext(checkCtx, "docker", "info")
+		if err := verCmd.Run(); err != nil {
+			return fmt.Errorf("docker daemon is not running. Start Docker Desktop before running docker services")
+		}
+	}
+
 	// Build docker run command
 	args := dr.buildDockerRunCommand()
 

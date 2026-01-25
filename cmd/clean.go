@@ -5,8 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/spf13/cobra"
 	"devup/internal/config"
+
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -59,9 +60,11 @@ func runClean(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Default to cleaning all if no specific flags are set
-	if !cleanEnv && !cleanLogs && !cleanDirs {
-		cleanAll = true
+	// Default behavior: clean logs and setup directories, but DO NOT remove .env
+	// Users must explicitly pass --env or --all to remove the .env file.
+	if !cleanEnv && !cleanLogs && !cleanDirs && !cleanAll {
+		cleanLogs = true
+		cleanDirs = true
 	}
 
 	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
