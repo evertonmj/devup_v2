@@ -76,21 +76,7 @@ func (l *Loader) resolveConfigPath() (string, error) {
 				return configPath, nil
 			}
 		}
-
-		// If environment variable not provided or invalid, check saved default project
-		configDir := filepath.Join(os.Getenv("HOME"), ".config", "devup")
-		defaultProjectFile := filepath.Join(configDir, "default_project")
-		if data, err := os.ReadFile(defaultProjectFile); err == nil {
-			// Trim whitespace and newlines
-			projectPath := string(data)
-			projectPath = filepath.Clean(projectPath)
-			if projectPath != "" {
-				configPath := filepath.Join(projectPath, "devup.yaml")
-				if _, err := os.Stat(configPath); err == nil {
-					return configPath, nil
-				}
-			}
-		}
+		// If DEVUP_DEFAULT_PROJECT is not set or invalid, fall through to search current directory first
 	}
 
 	// Search in common locations (current directory first)

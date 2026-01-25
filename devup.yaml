@@ -1,53 +1,40 @@
-# DevUp Configuration File
-# This is the main configuration for devup CLI
-
 version: "1.0"
 
 apps:
-  # Example: Sample application configuration
-  sample-app:
-    name: "Sample Application"
-    description: "Example application with multiple services"
-    workdir: "."
+  devup_v2:
+    name: "devup_v2"
+    description: "DevUp - Extensible Development Environment Manager"
+    workdir: "/Users/everton.jesus/workspace/devup_v2"
 
     services:
-      - name: frontend
+      - name: app
         type: process
-        command: "npm start"
+        command: "go run ."
         port: 3000
-        logfile: "logs/frontend.log"
-        healthcheck:
-          type: http
-          endpoint: "http://localhost:3000"
-          timeout: 30s
-          interval: 5s
-          retries: 6
+        logfile: "logs/app.log"
+        environment:
+          DEVUP_DEFAULT_PROJECT: "changeme"
 
-      - name: api
-        type: process
-        command: "npm run start:api"
-        port: 8000
-        logfile: "logs/api.log"
-        healthcheck:
-          type: http
-          endpoint: "http://localhost:8000/health"
-          timeout: 30s
-          interval: 5s
-          retries: 6
 
+    setup:
+      env_vars:
+        - name: "DEVUP_DEFAULT_PROJECT"
+          default: "changeme"
+          required: false
     modes:
       default:
-        name: "Default Mode"
-        description: "Run all services"
+        name: "Development"
+        description: "Full development environment"
         services:
-          - frontend
-          - api
+          - app
 
-      frontend-only:
-        name: "Frontend Only"
-        description: "Run only frontend for UI development"
-        services:
-          - frontend
+    install:
+      steps:
+        - name: "Download Go modules"
+          command: "go mod download"
 
-# Add more apps below as needed
-# See examples/ directory for more configuration templates
+    hooks:
+      pre_start:
+        - "mkdir -p logs"
+      post_start:
+        - "echo 'Application started successfully'"
