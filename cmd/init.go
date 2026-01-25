@@ -14,6 +14,9 @@ var (
 	initInteractive bool
 	initScan        bool
 	initForce       bool
+	onlyInit        bool
+	onlyInstall     bool
+	onlySetup       bool
 )
 
 var initCmd = &cobra.Command{
@@ -26,11 +29,15 @@ This command will:
 - Read README.md and other documentation to understand the project
 - Detect package managers and build tools
 - Create a devup.yaml configuration file with sensible defaults
+- Run installation phase to download dependencies
+- Run setup phase to prepare the environment
 
 Examples:
-  devup init                    # Interactive mode with project scanning
-  devup init --scan             # Auto-detect and create config
-  devup init --force            # Overwrite existing config`,
+  devup init                           # Full setup: scan, install, and setup everything
+  devup init --only-init               # Only create devup.yaml
+  devup init --only-install            # Only run installation phase
+  devup init --only-setup              # Only run setup phase
+  devup init --scan --force            # Auto-detect and overwrite existing config`,
 	RunE: runInit,
 }
 
@@ -40,63 +47,148 @@ func init() {
 	initCmd.Flags().BoolVarP(&initInteractive, "interactive", "i", true, "Interactive mode with prompts")
 	initCmd.Flags().BoolVar(&initScan, "scan", true, "Scan project directory for patterns")
 	initCmd.Flags().BoolVarP(&initForce, "force", "f", false, "Overwrite existing devup.yaml")
+	initCmd.Flags().BoolVar(&onlyInit, "only-init", false, "Only create devup.yaml, skip install and setup")
+	initCmd.Flags().BoolVar(&onlyInstall, "only-install", false, "Only run installation phase")
+	initCmd.Flags().BoolVar(&onlySetup, "only-setup", false, "Only run setup phase")
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
-	// Check if devup.yaml already exists
 	configPath := "devup.yaml"
-	if _, err := os.Stat(configPath); err == nil && !initForce {
-		return fmt.Errorf("devup.yaml already exists. Use --force to overwrite")
-	}
 
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Println("🚀 DevUp Project Initialization")
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Println()
+	// Determine which phases to run
+	runInitPhase := !onlyInstall && !onlySetup
+	runInstallPhase := !onlyInit && !onlySetup
+	runSetupPhase := !onlyInit && !onlyInstall
 
-	var projectInfo *ProjectInfo
-	var err error
-
-	if initScan {
-		fmt.Println("🔍 Scanning project directory...")
-		projectInfo, err = scanProject(".")
-		if err != nil {
-			return fmt.Errorf("failed to scan project: %w", err)
+	// Phase 1: Initialize (create devup.yaml)
+	if runInitPhase {
+		if _, err := os.Stat(configPath); err == nil && !initForce {
+			return fmt.Errorf("devup.yaml already exists. Use --force to overwrite")
 		}
-		fmt.Printf("✅ Detected: %s\n", projectInfo.Description)
+
+		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		fmt.Println("🚀 DevUp Project Initialization")
+		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 		fmt.Println()
-	} else {
-		projectInfo = &ProjectInfo{
-			Name: filepath.Base(getCurrentDir()),
+
+		var projectInfo *ProjectInfo
+		var err error
+
+		if initScan {
+			fmt.Println("🔍 Scanning project directory...")
+			projectInfo, err = scanProject(".")
+			if err != nil {
+				return fmt.Errorf("failed to scan project: %w", err)
+			}
+			fmt.Printf("✅ Detected: %s\n", projectInfo.Description)
+			fmt.Println()
+		} else {
+			projectInfo = &ProjectInfo{
+				Name: filepath.Base(getCurrentDir()),
+			}
 		}
-	}
 
-	if initInteractive {
-		if err := promptProjectInfo(projectInfo); err != nil {
-			return fmt.Errorf("failed to get project info: %w", err)
+		if initInteractive {
+			if err := promptProjectInfo(projectInfo); err != nil {
+				return fmt.Errorf("failed to get project info: %w", err)
+			}
 		}
+
+		// Generate devup.yaml
+		config := generateConfig(projectInfo)
+
+		// Write to file
+		if err := os.WriteFile(configPath, []byte(config), 0644); err != nil {
+			return fmt.Errorf("failed to write devup.yaml: %w", err)
+		}
+
+		fmt.Println()
+		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		fmt.Println("✅ Configuration created successfully")
+		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		fmt.Println()
 	}
 
-	// Generate devup.yaml
-	config := generateConfig(projectInfo)
+	// Phase 2: Install
+	if runInstallPhase {
+		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		fmt.Println("📦 Installing dependencies...")
+		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		fmt.Println()
 
-	// Write to file
-	if err := os.WriteFile(configPath, []byte(config), 0644); err != nil {
-		return fmt.Errorf("failed to write devup.yaml: %w", err)
+		// Call install command - set local flag to use the just-created config
+		savedLocal := local
+		local = true
+		installCmd := rootCmd.Commands()
+		var install *cobra.Command
+		for _, c := range installCmd {
+			if c.Name() == "install" {
+				install = c
+				break
+			}
+		}
+		if install == nil {
+			local = savedLocal
+			return fmt.Errorf("install command not found")
+		}
+		if err := install.RunE(install, []string{}); err != nil {
+			local = savedLocal
+			return fmt.Errorf("failed to install: %w", err)
+		}
+		local = savedLocal
+
+		fmt.Println()
+		fmt.Println("✅ Installation completed")
+		fmt.Println()
 	}
 
-	fmt.Println()
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Println("✅ Successfully created devup.yaml")
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Println()
-	fmt.Println("📝 Next steps:")
-	fmt.Println("  1. Review and customize devup.yaml")
-	fmt.Println("  2. Test your configuration: devup list")
-	fmt.Println("  3. Start your application: devup start")
-	fmt.Println()
-	fmt.Println("📚 For help, see: https://github.com/evertonmj/devup_v2/blob/main/docs/TUTORIAL.md")
-	fmt.Println()
+	// Phase 3: Setup
+	if runSetupPhase {
+		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		fmt.Println("🔧 Running setup...")
+		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		fmt.Println()
+
+		// Call setup command - set local flag to use the just-created config
+		savedLocal := local
+		local = true
+		setupCmd := rootCmd.Commands()
+		var setup *cobra.Command
+		for _, c := range setupCmd {
+			if c.Name() == "setup" {
+				setup = c
+				break
+			}
+		}
+		if setup == nil {
+			local = savedLocal
+			return fmt.Errorf("setup command not found")
+		}
+		if err := setup.RunE(setup, []string{}); err != nil {
+			local = savedLocal
+			return fmt.Errorf("failed to setup: %w", err)
+		}
+		local = savedLocal
+
+		fmt.Println()
+		fmt.Println("✅ Setup completed")
+		fmt.Println()
+	}
+
+	// Show summary
+	if !onlyInit && !onlyInstall && !onlySetup {
+		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		fmt.Println("✅ Project fully initialized and ready to use!")
+		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		fmt.Println()
+		fmt.Println("📝 Next steps:")
+		fmt.Println("  1. Review and customize devup.yaml if needed")
+		fmt.Println("  2. Start your application: devup start")
+		fmt.Println("  3. View status: devup status")
+		fmt.Println()
+		fmt.Println("📚 For help, see: https://github.com/evertonmj/devup_v2/blob/main/docs/TUTORIAL.md")
+		fmt.Println()
+	}
 
 	return nil
 }
@@ -260,7 +352,7 @@ func analyzeDocumentation(dir string, info *ProjectInfo) {
 }
 
 func detectProjectStructure(dir string, info *ProjectInfo) {
-	// Common patterns
+	// Common patterns - only add if directory actually exists
 	patterns := map[string]ServiceInfo{
 		"frontend": {Name: "frontend", Type: "web", Port: 3000},
 		"ui":       {Name: "ui", Type: "web", Port: 3000},
@@ -269,7 +361,6 @@ func detectProjectStructure(dir string, info *ProjectInfo) {
 		"backend":  {Name: "backend", Type: "api", Port: 8000},
 		"api":      {Name: "api", Type: "api", Port: 8000},
 		"server":   {Name: "server", Type: "api", Port: 8000},
-		"service":  {Name: "service", Type: "api", Port: 8080},
 	}
 
 	entries, err := os.ReadDir(dir)
@@ -627,11 +718,14 @@ func parseDotEnvContent(content string, info *ProjectInfo) {
 		}
 		key := strings.TrimSpace(parts[0])
 		val := strings.TrimSpace(parts[1])
-		// strip surrounding quotes
-		if len(val) >= 2 {
+		// strip surrounding quotes (handle multiple layers)
+		for len(val) >= 2 {
 			if (strings.HasPrefix(val, "\"") && strings.HasSuffix(val, "\"")) ||
 				(strings.HasPrefix(val, "'") && strings.HasSuffix(val, "'")) {
 				val = val[1 : len(val)-1]
+				val = strings.TrimSpace(val) // trim after removing quotes
+			} else {
+				break
 			}
 		}
 		if key != "" {
@@ -696,7 +790,8 @@ func generateConfig(info *ProjectInfo) string {
 	sb.WriteString(fmt.Sprintf("  %s:\n", strings.ToLower(strings.ReplaceAll(info.Name, " ", "-"))))
 	sb.WriteString(fmt.Sprintf("    name: \"%s\"\n", info.Name))
 	sb.WriteString(fmt.Sprintf("    description: \"%s\"\n", info.Description))
-	sb.WriteString("    workdir: \".\"\n\n")
+	workdirAbs, _ := filepath.Abs(".")
+	sb.WriteString(fmt.Sprintf("    workdir: \"%s\"\n\n", workdirAbs))
 
 	// Services
 	sb.WriteString("    services:\n")
@@ -752,28 +847,22 @@ func generateConfig(info *ProjectInfo) string {
 					sb.WriteString("        command: \"echo 'Update this command'\"\n")
 				}
 				if svc.Directory != "" && svc.Directory != "." {
-					sb.WriteString(fmt.Sprintf("        workdir: \"%s\"\n", svc.Directory))
+					// Only set workdir if directory actually exists in project
+					if _, err := os.Stat(svc.Directory); err == nil {
+						// Use relative path for service workdir to avoid double-joining with app workdir
+						sb.WriteString(fmt.Sprintf("        workdir: \"%s\"\n", svc.Directory))
+					}
 				}
 				if svc.Port > 0 {
 					sb.WriteString(fmt.Sprintf("        port: %d\n", svc.Port))
 				}
 				sb.WriteString(fmt.Sprintf("        logfile: \"logs/%s.log\"\n", svc.Name))
 
-				// Add dependencies if multiple services
-				if len(info.Services) > 1 && svc.Name == "frontend" {
-					sb.WriteString("        dependencies:\n")
-					for _, dep := range info.Services {
-						if dep.Name != svc.Name && dep.Type == "api" {
-							sb.WriteString(fmt.Sprintf("          - %s\n", dep.Name))
-						}
-					}
-				}
-
-				// Add environment variables
+				// Add environment variables for process services
 				if len(info.Environment) > 0 {
 					sb.WriteString("        environment:\n")
 					for key, val := range info.Environment {
-						sb.WriteString(fmt.Sprintf("          %s: \"%s\"\n", key, val))
+						sb.WriteString(fmt.Sprintf("          %s: %s\n", key, val))
 					}
 				}
 			}
@@ -791,7 +880,7 @@ func generateConfig(info *ProjectInfo) string {
 				// default simple shape: name + default
 				sb.WriteString("        - name: \"" + key + "\"\n")
 				if val != "" {
-					sb.WriteString("          default: \"" + val + "\"\n")
+					sb.WriteString("          default: " + val + "\n")
 				}
 				sb.WriteString("          required: false\n")
 			}
@@ -827,16 +916,22 @@ func generateConfig(info *ProjectInfo) string {
 	}
 
 	// Add hooks
+	sb.WriteString("\n    install:\n")
+	sb.WriteString("      steps:\n")
+	if info.PackageMgr == "npm" {
+		sb.WriteString("        - name: \"Install npm dependencies\"\n")
+		sb.WriteString("          command: \"npm install\"\n")
+	} else if info.PackageMgr == "go" {
+		sb.WriteString("        - name: \"Download Go modules\"\n")
+		sb.WriteString("          command: \"go mod download\"\n")
+	} else if info.PackageMgr == "pip" {
+		sb.WriteString("        - name: \"Install Python dependencies\"\n")
+		sb.WriteString("          command: \"pip install -r requirements.txt\"\n")
+	}
+
 	sb.WriteString("\n    hooks:\n")
 	sb.WriteString("      pre_start:\n")
 	sb.WriteString("        - \"mkdir -p logs\"\n")
-	if info.PackageMgr == "npm" {
-		sb.WriteString("        - \"npm install\"\n")
-	} else if info.PackageMgr == "go" {
-		sb.WriteString("        - \"go mod download\"\n")
-	} else if info.PackageMgr == "pip" {
-		sb.WriteString("        - \"pip install -r requirements.txt\"\n")
-	}
 	sb.WriteString("      post_start:\n")
 	sb.WriteString("        - \"echo 'Application started successfully'\"\n")
 
