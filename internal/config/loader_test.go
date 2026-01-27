@@ -527,12 +527,12 @@ func TestLoaderResolveConfigPath(t *testing.T) {
 			setup: func() (string, func()) {
 				tmpDir, _ := os.MkdirTemp("", "devup-test-*")
 				f := filepath.Join(tmpDir, "devup.yaml")
-				os.WriteFile(f, []byte("version: '1.0'\napps: {}"), 0644)
+				_ = os.WriteFile(f, []byte("version: '1.0'\napps: {}"), 0644)
 				old := os.Getenv("DEVUP_DEFAULT_PROJECT")
-				os.Setenv("DEVUP_DEFAULT_PROJECT", tmpDir)
+				_ = os.Setenv("DEVUP_DEFAULT_PROJECT", tmpDir)
 				return "", func() {
-					os.Setenv("DEVUP_DEFAULT_PROJECT", old)
-					os.RemoveAll(tmpDir)
+					_ = os.Setenv("DEVUP_DEFAULT_PROJECT", old)
+					_ = os.RemoveAll(tmpDir)
 				}
 			},
 			wantErr: false,

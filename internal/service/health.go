@@ -18,7 +18,7 @@ func checkHTTPHealth(endpoint string) bool {
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	return resp.StatusCode >= 200 && resp.StatusCode < 300
 }
@@ -30,7 +30,7 @@ func checkTCPHealth(port int) bool {
 	if err != nil {
 		return false
 	}
-	conn.Close()
+	_ = conn.Close()
 	return true
 }
 
