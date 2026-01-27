@@ -492,8 +492,8 @@ func TestLoaderResolveConfigPath(t *testing.T) {
 			setup: func() (string, func()) {
 				tmpDir, _ := os.MkdirTemp("", "devup-test-*")
 				tmpFile := filepath.Join(tmpDir, "devup.yaml")
-				os.WriteFile(tmpFile, []byte("version: '1.0'\napps: {}"), 0644)
-				return tmpFile, func() { os.RemoveAll(tmpDir) }
+				_ = os.WriteFile(tmpFile, []byte("version: '1.0'\napps: {}"), 0644)
+				return tmpFile, func() { _ = os.RemoveAll(tmpDir) }
 			},
 			wantErr: false,
 		},
@@ -511,11 +511,11 @@ func TestLoaderResolveConfigPath(t *testing.T) {
 			setup: func() (string, func()) {
 				tmpDir, _ := os.MkdirTemp("", "devup-test-*")
 				origDir, _ := os.Getwd()
-				os.Chdir(tmpDir)
-				os.WriteFile("devup.yaml", []byte("version: '1.0'\napps: {}"), 0644)
+				_ = os.Chdir(tmpDir)
+				_ = os.WriteFile("devup.yaml", []byte("version: '1.0'\napps: {}"), 0644)
 				return "", func() {
-					os.Chdir(origDir)
-					os.RemoveAll(tmpDir)
+					_ = os.Chdir(origDir)
+					_ = os.RemoveAll(tmpDir)
 				}
 			},
 			wantErr: false,
