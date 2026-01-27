@@ -6,35 +6,17 @@ import (
 	"testing"
 )
 
+const envTestYaml = "version: \"1.0\"\napps:\n  myapp:\n    name: \"My App\"\n    workdir: \".\"\n    services:\n      - name: s1\n        command: \"echo test\"\n    modes:\n      default:\n        services: [s1]\n"
+
 func TestRunEnv(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfgPath := filepath.Join(tmpDir, "devup.yaml")
 	envPath := filepath.Join(tmpDir, ".env")
-	const yaml = `version: "1.0"
-apps:
-  myapp:
-    name: "My App"
-    workdir: "%s"
-    services:
-      - name: s1
-        command: "echo test"
-    modes:
-      default:
-        services: [s1]
-`
-	yamlWithWorkdir := tmpDir
-	if len(tmpDir) > 0 && tmpDir[0] != '/' {
-		// use absolute path
-		abs, _ := filepath.Abs(tmpDir)
-		yamlWithWorkdir = abs
-	}
-	content := `KEY1=value1
-KEY2=value2
-`
-	if err := os.WriteFile(cfgPath, []byte("version: \"1.0\"\napps:\n  myapp:\n    name: \"My App\"\n    workdir: \""+tmpDir+"\"\n    services:\n      - name: s1\n        command: \"echo test\"\n    modes:\n      default:\n        services: [s1]\n"), 0644); err != nil {
+	cfgContent := "version: \"1.0\"\napps:\n  myapp:\n    name: \"My App\"\n    workdir: \"" + tmpDir + "\"\n    services:\n      - name: s1\n        command: \"echo test\"\n    modes:\n      default:\n        services: [s1]\n"
+	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
-	_ = yamlWithWorkdir
+	content := "KEY1=value1\nKEY2=value2\n"
 	if err := os.WriteFile(envPath, []byte(content), 0644); err != nil {
 		t.Fatalf("write .env: %v", err)
 	}
@@ -57,25 +39,20 @@ KEY2=value2
 func TestRunEnv_NotFound(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfgPath := filepath.Join(tmpDir, "devup.yaml")
-	const yaml = `version: "1.0"
-apps:
-  myapp:
-    name: "My App"
-    workdir: "."
-    services:
-      - name: s1
-        command: "echo test"
-    modes:
-      default:
-        services: [s1]
-`
-	if err := os.WriteFile(cfgPath, []byte(yaml), 0644); err != nil {
+	if err := os.WriteFile(cfgPath, []byte(envTestYaml), 0644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
-	origWd, _ := os.Getwd()
-	os.Chdir(tmpDir)
-	defer os.Chdir(origWd)
-	os.WriteFile("devup.yaml", []byte(yaml), 0644)
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(origWd) }()
+	if err := os.WriteFile("devup.yaml", []byte(envTestYaml), 0644); err != nil {
+		t.Fatalf("write devup.yaml: %v", err)
+	}
 	// no .env
 
 	saveCfg, saveLocal, saveApp := cfgFile, local, appName
