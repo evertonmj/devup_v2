@@ -76,12 +76,13 @@ var newCommand = func(ctx context.Context, name string, arg ...string) Commander
 
 // ProcessRunner manages a single process-based service
 type ProcessRunner struct {
-	config    config.Service
-	workDir   string
-	cmd       Commander
-	logFile   *os.File
-	startTime time.Time
-	mu        sync.Mutex
+	config      config.Service
+	workDir     string
+	cmd         Commander
+	logFile     *os.File
+	startTime   time.Time
+	mu          sync.Mutex
+	monitorDone chan struct{} // closed when monitor goroutine finishes
 }
 
 // NewProcessRunner creates a new process runner for a service
@@ -138,6 +139,7 @@ func (p *ProcessRunner) Start(ctx context.Context) error {
 
 	p.cmd = cmd
 	p.startTime = time.Now()
+	p.monitorDone = make(chan struct{})
 
 	// Monitor process in background
 	go p.monitor()
@@ -177,19 +179,12 @@ func (p *ProcessRunner) Stop(ctx context.Context) error {
 		syscall.Kill(-pgid, syscall.SIGKILL)
 	}
 
-	// Wait for graceful shutdown with timeout
-	done := make(chan error, 1)
-	go func() {
-		done <- p.cmd.Wait()
-	}()
-
+	// Wait for monitor (which owns Wait) to finish, with timeout
 	select {
 	case <-time.After(3 * time.Second):
-		// Force kill after timeout
 		syscall.Kill(-pgid, syscall.SIGKILL)
-		<-done
-	case <-done:
-		// Process exited gracefully
+		<-p.monitorDone
+	case <-p.monitorDone:
 	}
 
 	// Close log file
@@ -302,12 +297,13 @@ func (p *ProcessRunner) setupLogging(cmd Commander) error {
 	return nil
 }
 
-// monitor watches the process and handles unexpected exits
+// monitor watches the process and handles unexpected exits.
+// It is the only goroutine that calls Wait on the Cmd; Stop waits for monitorDone.
 func (p *ProcessRunner) monitor() {
+	defer close(p.monitorDone)
 	if p.cmd == nil {
 		return
 	}
-
 	err := p.cmd.Wait()
 	if err != nil {
 		fmt.Printf("Service '%s' exited with error: %v\n", p.config.Name, err)
