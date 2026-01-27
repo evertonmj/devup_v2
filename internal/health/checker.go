@@ -18,7 +18,7 @@ func CheckHTTP(endpoint string, timeout time.Duration) error {
 	if err != nil {
 		return fmt.Errorf("HTTP health check failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return nil
@@ -29,12 +29,12 @@ func CheckHTTP(endpoint string, timeout time.Duration) error {
 
 // CheckTCP performs a TCP port health check
 func CheckTCP(host string, port int, timeout time.Duration) error {
-	address := fmt.Sprintf("%s:%d", host, port)
+	address := net.JoinHostPort(host, fmt.Sprintf("%d", port))
 	conn, err := net.DialTimeout("tcp", address, timeout)
 	if err != nil {
 		return fmt.Errorf("TCP health check failed: %w", err)
 	}
-	conn.Close()
+	_ = conn.Close()
 	return nil
 }
 
@@ -55,7 +55,7 @@ func CheckExec(command string, timeout time.Duration) error {
 	select {
 	case <-time.After(timeout):
 		if cmd.Process != nil {
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 		}
 		return fmt.Errorf("exec health check timed out")
 	case err := <-done:
