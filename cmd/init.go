@@ -873,6 +873,12 @@ func generateConfig(info *ProjectInfo) string {
 				if svc.Port > 0 {
 					sb.WriteString(fmt.Sprintf("        port: %d\n", svc.Port))
 				}
+				if len(svc.Dependencies) > 0 {
+					sb.WriteString("        dependencies:\n")
+					for _, dep := range svc.Dependencies {
+						sb.WriteString(fmt.Sprintf("          - %s\n", dep))
+					}
+				}
 				sb.WriteString(fmt.Sprintf("        logfile: \"logs/%s.log\"\n", svc.Name))
 
 				// Add environment variables for process services

@@ -42,8 +42,9 @@
 
 ## 📦 Installation
 
+```bash
 git clone https://github.com/evertonmj/devup_v2.git
-cd devup
+cd devup_v2
 
 # Build the binary
 make build
@@ -489,7 +490,7 @@ DevUp is built with extensibility as a core principle:
 └─────────────────────────────────────┘
 ```
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed technical documentation.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed technical documentation.
 
 ---
 

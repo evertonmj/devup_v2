@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 func TestDetectDatabaseServices(t *testing.T) {
@@ -291,6 +293,9 @@ func TestRunInit(t *testing.T) {
         if _, err := os.Create("devup.yaml"); err != nil {
             t.Fatalf("Failed to create dummy devup.yaml: %v", err)
         }
+
+        onlyInit = true
+        defer func() { onlyInit = false }()
 
         cmd := &cobra.Command{}
         err := runInit(cmd, []string{})
