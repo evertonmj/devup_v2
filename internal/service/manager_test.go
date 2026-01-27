@@ -609,7 +609,7 @@ func TestManagerStartStop_DockerWhenAvailable(t *testing.T) {
 			"default": {Services: []string{"dc"}},
 		},
 	}
-	defer exec.CommandContext(context.Background(), "docker", "rm", "-f", containerName).Run()
+	defer func() { _ = exec.CommandContext(context.Background(), "docker", "rm", "-f", containerName).Run() }()
 
 	mgr := NewManager(app, "default")
 	if err := mgr.Start(ctx); err != nil {

@@ -19,11 +19,14 @@ apps:
       default:
         services: [s1]
 `
-	origWd, _ := os.Getwd()
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Chdir(tmpDir); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chdir(origWd)
+	defer func() { _ = os.Chdir(origWd) }()
 	if err := os.WriteFile("devup.yaml", []byte(yaml), 0644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}

@@ -42,7 +42,7 @@ func TestCleanPort_WithListener(t *testing.T) {
 	if err := cmd.Start(); err != nil {
 		t.Skipf("go run listener: %v", err)
 	}
-	defer cmd.Process.Kill()
+	defer func() { _ = cmd.Process.Kill() }()
 	scanner := bufio.NewScanner(stdout)
 	if !scanner.Scan() {
 		t.Fatalf("could not read port")
