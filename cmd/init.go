@@ -855,6 +855,12 @@ func generateConfig(info *ProjectInfo) string {
 						sb.WriteString(fmt.Sprintf("            %s: \"%s\"\n", k, v))
 					}
 				}
+				if len(svc.Dependencies) > 0 {
+					sb.WriteString("        dependencies:\n")
+					for _, dep := range svc.Dependencies {
+						sb.WriteString(fmt.Sprintf("          - %s\n", dep))
+					}
+				}
 			} else {
 				// Process service
 				sb.WriteString("        type: process\n")
