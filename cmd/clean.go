@@ -81,7 +81,7 @@ func runClean(cmd *cobra.Command, args []string) error {
 		fmt.Print("Are you sure you want to continue? (yes/no): ")
 
 		var response string
-		fmt.Scanln(&response)
+		_, _ = fmt.Scanln(&response)
 		if response != "yes" && response != "y" {
 			fmt.Println("\n❌ Clean cancelled")
 			return nil

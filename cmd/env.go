@@ -80,8 +80,8 @@ func runEnv() error {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-
-		if envFormat == "export" {
+		switch envFormat {
+		case "export":
 			// Split on first = only
 			parts := strings.SplitN(line, "=", 2)
 			if len(parts) == 2 {
@@ -92,9 +92,9 @@ func runEnv() error {
 				// Use %q to properly escape special characters for shell
 				fmt.Printf("export %s=%q\n", key, value)
 			}
-		} else if envFormat == "raw" {
+		case "raw":
 			fmt.Println(line)
-		} else if envFormat == "json" {
+		case "json":
 			parts := strings.SplitN(line, "=", 2)
 			if len(parts) == 2 {
 				fmt.Printf("  \"%s\": \"%s\",\n", parts[0], strings.Trim(parts[1], "\"'"))

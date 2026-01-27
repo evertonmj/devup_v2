@@ -662,9 +662,7 @@ func extractPorts(line string, info *ProjectInfo) {
 	words := strings.Fields(line)
 	for i, word := range words {
 		word = strings.Trim(word, "`:,")
-		if strings.HasPrefix(word, "PORT=") {
-			word = strings.TrimPrefix(word, "PORT=")
-		}
+		word = strings.TrimPrefix(word, "PORT=")
 		if len(word) == 4 || len(word) == 5 {
 			// Could be a port number
 			if i > 0 && strings.ToLower(words[i-1]) == "port" {
@@ -673,7 +671,7 @@ func extractPorts(line string, info *ProjectInfo) {
 					// Assign to first service that doesn't have a port
 					for idx := range info.Services {
 						if info.Services[idx].Port == 0 {
-							fmt.Sscanf(word, "%d", &info.Services[idx].Port)
+							_, _ = fmt.Sscanf(word, "%d", &info.Services[idx].Port)
 							break
 						}
 					}
