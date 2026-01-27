@@ -131,8 +131,8 @@ func (dr *DockerRunner) Stop(ctx context.Context) error {
 
 	// Log container stop
 	if f, err := os.OpenFile(dr.logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
-		defer f.Close()
-		fmt.Fprintf(f, "[devup] Container stopped at %s (duration: %v)\n",
+		defer func() { _ = f.Close() }()
+		_, _ = fmt.Fprintf(f, "[devup] Container stopped at %s (duration: %v)\n",
 			time.Now().Format(time.RFC3339), time.Since(dr.startTime))
 	}
 
@@ -144,11 +144,7 @@ func (dr *DockerRunner) Status() ServiceStatus {
 	// Check if container is running
 	inspectCmd := exec.Command("docker", "inspect", "-f", "{{.State.Running}}", dr.container)
 	output, err := inspectCmd.CombinedOutput()
-
-	running := false
-	if err == nil && strings.TrimSpace(string(output)) == "true" {
-		running = true
-	}
+	running := err == nil && strings.TrimSpace(string(output)) == "true"
 
 	return ServiceStatus{
 		Name:      dr.name,
@@ -226,7 +222,7 @@ func (dr *DockerRunner) buildDockerRunCommand() []string {
 	// Pull image before running
 	if dr.docker.Pull {
 		pullCmd := exec.Command("docker", "pull", dr.docker.Image)
-		pullCmd.Run() // Ignore errors, docker run will fail if image unavailable
+		_ = pullCmd.Run() // Ignore errors, docker run will fail if image unavailable
 	}
 
 	// Image

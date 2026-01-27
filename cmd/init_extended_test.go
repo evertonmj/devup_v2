@@ -286,9 +286,14 @@ func TestPythonServiceDirs(t *testing.T) {
 func TestRunInit(t *testing.T) {
     t.Run("devup.yaml already exists", func(t *testing.T) {
         tmpDir := t.TempDir()
-        originalWd, _ := os.Getwd()
-        os.Chdir(tmpDir)
-        defer os.Chdir(originalWd)
+        originalWd, err := os.Getwd()
+        if err != nil {
+            t.Fatal(err)
+        }
+        if err := os.Chdir(tmpDir); err != nil {
+            t.Fatal(err)
+        }
+        defer func() { _ = os.Chdir(originalWd) }()
 
         if _, err := os.Create("devup.yaml"); err != nil {
             t.Fatalf("Failed to create dummy devup.yaml: %v", err)
@@ -298,7 +303,7 @@ func TestRunInit(t *testing.T) {
         defer func() { onlyInit = false }()
 
         cmd := &cobra.Command{}
-        err := runInit(cmd, []string{})
+        err = runInit(cmd, []string{})
 
         if err == nil || !strings.Contains(err.Error(), "devup.yaml already exists") {
             t.Errorf("Expected error about existing devup.yaml, got: %v", err)
@@ -307,9 +312,14 @@ func TestRunInit(t *testing.T) {
 
     t.Run("force overwrite", func(t *testing.T) {
         tmpDir := t.TempDir()
-        originalWd, _ := os.Getwd()
-        os.Chdir(tmpDir)
-        defer os.Chdir(originalWd)
+        originalWd, err := os.Getwd()
+        if err != nil {
+            t.Fatal(err)
+        }
+        if err := os.Chdir(tmpDir); err != nil {
+            t.Fatal(err)
+        }
+        defer func() { _ = os.Chdir(originalWd) }()
 
         if _, err := os.Create("devup.yaml"); err != nil {
             t.Fatalf("Failed to create dummy devup.yaml: %v", err)
@@ -331,7 +341,7 @@ func TestRunInit(t *testing.T) {
         rootCmd.AddCommand(setupCmd)
 
         cmd := &cobra.Command{}
-        err := runInit(cmd, []string{})
+        err = runInit(cmd, []string{})
 
         if err != nil {
             t.Errorf("Expected no error with --force, got: %v", err)
@@ -340,22 +350,27 @@ func TestRunInit(t *testing.T) {
 
     t.Run("only-init flag", func(t *testing.T) {
         tmpDir := t.TempDir()
-        originalWd, _ := os.Getwd()
-        os.Chdir(tmpDir)
-        defer os.Chdir(originalWd)
-    
+        originalWd, err := os.Getwd()
+        if err != nil {
+            t.Fatal(err)
+        }
+        if err := os.Chdir(tmpDir); err != nil {
+            t.Fatal(err)
+        }
+        defer func() { _ = os.Chdir(originalWd) }()
+
         onlyInit = true
         defer func() { onlyInit = false }()
     
         // No need to mock install/setup as they shouldn't be called
     
         cmd := &cobra.Command{}
-        err := runInit(cmd, []string{})
-    
+        err = runInit(cmd, []string{})
+
         if err != nil {
             t.Errorf("runInit with --only-init failed: %v", err)
         }
-    
+
         if _, err := os.Stat("devup.yaml"); os.IsNotExist(err) {
             t.Error("devup.yaml was not created with --only-init")
         }

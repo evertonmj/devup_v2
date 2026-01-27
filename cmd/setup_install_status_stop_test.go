@@ -61,11 +61,14 @@ func setupMinimalConfig(t *testing.T) (string, func()) {
 	if err := os.WriteFile(cfgPath, []byte(minimalYaml), 0644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
-	orig, _ := os.Getwd()
-	os.Chdir(tmpDir)
-	return cfgPath, func() {
-		os.Chdir(orig)
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
 	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	return cfgPath, func() { _ = os.Chdir(orig) }
 }
 
 func TestRunSetup_DryRun(t *testing.T) {
@@ -144,9 +147,14 @@ func TestRunSetup_WithDirectoriesDryRun(t *testing.T) {
 	if err := os.WriteFile(cfgPath, []byte(setupWithDirsYaml), 0644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
-	orig, _ := os.Getwd()
-	os.Chdir(tmpDir)
-	defer os.Chdir(orig)
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(orig) }()
 
 	saveCfg, saveLocal, saveApp, saveDry := cfgFile, local, appName, setupDryRun
 	defer func() {
@@ -169,9 +177,14 @@ func TestRunInstall_WithHooksDryRun(t *testing.T) {
 	if err := os.WriteFile(cfgPath, []byte(installWithHooksYaml), 0644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
-	orig, _ := os.Getwd()
-	os.Chdir(tmpDir)
-	defer os.Chdir(orig)
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(orig) }()
 
 	saveCfg, saveLocal, saveApp, saveDry := cfgFile, local, appName, dryRun
 	defer func() {

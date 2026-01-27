@@ -26,7 +26,7 @@ func TestDockerRunner_WhenDockerAvailable(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	logDir := filepath.Join(tmpDir, "logs")
-	os.MkdirAll(logDir, 0755)
+	_ = os.MkdirAll(logDir, 0755)
 	containerName := fmt.Sprintf("devup-test-docker-%d", time.Now().UnixNano()%1000000)
 
 	svc := &config.Service{
@@ -47,7 +47,7 @@ func TestDockerRunner_WhenDockerAvailable(t *testing.T) {
 	}
 	runner := NewDockerRunner(svc, svc.Docker, tmpDir)
 	defer func() {
-		exec.CommandContext(context.Background(), "docker", "rm", "-f", containerName).Run()
+		_ = exec.CommandContext(context.Background(), "docker", "rm", "-f", containerName).Run()
 	}()
 
 	if err := runner.Start(ctx); err != nil {
@@ -94,7 +94,7 @@ func TestDockerRunner_WhenDockerAvailable(t *testing.T) {
 		LogFile: filepath.Join(logDir, "dockersvc2.log"),
 	}
 	runner2 := NewDockerRunner(svc2, svc2.Docker, tmpDir)
-	defer exec.CommandContext(context.Background(), "docker", "rm", "-f", containerName2).Run()
+	defer func() { _ = exec.CommandContext(context.Background(), "docker", "rm", "-f", containerName2).Run() }()
 	if err := runner2.Start(ctx); err != nil {
 		t.Logf("Docker Start (WorkDir+Labels): %v", err)
 		return
