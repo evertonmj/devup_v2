@@ -63,6 +63,7 @@ All tests now pass, including `-race`.
 - **Makefile:** `LDFLAGS` references `github.com/evertonmj/devup_v2/cmd.Version`, but the module is `devup` and there is no `cmd.Version`; version comes from the `VERSION` file via `getVersion()`. The `build` target does not use `LDFLAGS`. Consider removing or fixing the `-X` inject so it’s not misleading.
 - **Linter:** CONTRIBUTING mentions `gofmt`. CI uses `golangci-lint`. Recommend adding a short “Run `golangci-lint run ./...`” note to CONTRIBUTING.
 - **`.golangci.yml`:** Not present; CI uses defaults. Optional improvement: add a minimal config (e.g. linters, exclusions) for consistency.
+- **Lint / quality:** SonarQube-style checks report cognitive complexity and duplicated string literals in `cmd/init.go` and tests. These do not affect build or tests; address gradually if desired.
 
 ---
 
