@@ -97,14 +97,22 @@ install: build
 ## test: Run tests
 test:
 	@echo "Running tests..."
-	$(GOTEST) -v -cover ./...
+	$(GOTEST) -v -cover ./cmd/... ./internal/...
 
-## test-coverage: Run tests and generate coverage report
+## test-coverage: Run tests and generate coverage report (cmd + internal)
 test-coverage:
 	@echo "Running tests with coverage..."
-	$(GOTEST) -v -coverprofile=coverage.out ./...
+	$(GOTEST) -coverprofile=coverage.out ./cmd/... ./internal/...
 	@echo "✅ Coverage report generated: coverage.out"
+	@go tool cover -func=coverage.out | grep '^total:'
 	@echo "To view the report, run: go tool cover -html=coverage.out"
+
+## test-coverage-internal: Run tests for internal packages only; fail if coverage < 90%%
+test-coverage-internal:
+	@echo "Running internal package tests with coverage (target ≥90%)..."
+	$(GOTEST) -coverprofile=coverage_internal.out ./internal/...
+	@go tool cover -func=coverage_internal.out | grep '^total:'
+	@go tool cover -func=coverage_internal.out | awk '/^total:/ { gsub(/%/,""); p=$$NF+0; if (p < 90) { printf "❌ Internal coverage %.1f%% is below 90%%\n", p; exit 1 }; printf "✅ Internal coverage %.1f%%\n", p }'
 
 ## lint: Run linter
 lint:

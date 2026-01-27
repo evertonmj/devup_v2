@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -58,6 +59,31 @@ apps: {}
 			wantApps: 0,
 		},
 	}
+
+	// Load with explicit nonexistent path
+	t.Run("load explicit nonexistent path", func(t *testing.T) {
+		loader := NewLoader("/nonexistent/devup.yaml")
+		_, err := loader.Load()
+		if err == nil {
+			t.Fatal("Load() expected error for nonexistent path")
+		}
+		if !strings.Contains(err.Error(), "config file not found") && !strings.Contains(err.Error(), "failed to resolve") {
+			t.Errorf("Load() error = %v, expected config not found or resolve error", err)
+		}
+	})
+
+	// Load with path that exists but is not a file (directory → read error)
+	t.Run("load path is directory", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		loader := NewLoader(tmpDir)
+		_, err := loader.Load()
+		if err == nil {
+			t.Fatal("Load() expected error when path is directory")
+		}
+		if !strings.Contains(err.Error(), "read") && !strings.Contains(err.Error(), "parse") {
+			t.Logf("Load() error = %v (read/parse expected)", err)
+		}
+	})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -226,6 +252,101 @@ func TestLoaderValidate(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "invalid healthcheck type",
+			config: &AppConfig{
+				Version: "1.0",
+				Apps: map[string]AppSpec{
+					"test-app": {
+						Name:    "Test App",
+						WorkDir: ".",
+						Services: []Service{
+							{
+								Name:    "service1",
+								Command: "echo test",
+								HealthCheck: HealthCheck{Type: "invalid", Endpoint: "http://x"},
+							},
+						},
+						Modes: map[string]Mode{"default": {Services: []string{"service1"}}},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "healthcheck http missing endpoint",
+			config: &AppConfig{
+				Version: "1.0",
+				Apps: map[string]AppSpec{
+					"test-app": {
+						Name:    "Test App",
+						WorkDir: ".",
+						Services: []Service{
+							{
+								Name:        "service1",
+								Command:     "echo test",
+								HealthCheck: HealthCheck{Type: "http"},
+							},
+						},
+						Modes: map[string]Mode{"default": {Services: []string{"service1"}}},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "unknown dependency",
+			config: &AppConfig{
+				Version: "1.0",
+				Apps: map[string]AppSpec{
+					"test-app": {
+						Name:    "Test App",
+						WorkDir: ".",
+						Services: []Service{
+							{Name: "service1", Command: "echo test"},
+							{Name: "service2", Command: "echo test", Dependencies: []string{"nonexistent"}},
+						},
+						Modes: map[string]Mode{"default": {Services: []string{"service1", "service2"}}},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "app name empty uses key",
+			config: &AppConfig{
+				Version: "1.0",
+				Apps: map[string]AppSpec{
+					"my-key": {
+						Name:    "",
+						WorkDir: ".",
+						Services: []Service{{Name: "s1", Command: "echo test"}},
+						Modes:   map[string]Mode{"default": {Services: []string{"s1"}}},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "service with docker config no command",
+			config: &AppConfig{
+				Version: "1.0",
+				Apps: map[string]AppSpec{
+					"test-app": {
+						Name:    "Test App",
+						WorkDir: ".",
+						Services: []Service{
+							{
+								Name:    "db",
+								Docker:  &DockerConfig{Image: "postgres:15"},
+							},
+						},
+						Modes: map[string]Mode{"default": {Services: []string{"db"}}},
+					},
+				},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -236,6 +357,50 @@ func TestLoaderValidate(t *testing.T) {
 				t.Errorf("validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestLoaderValidate_WorkdirNotExist(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &AppConfig{
+		Version: "1.0",
+		Apps: map[string]AppSpec{
+			"test-app": {
+				Name:    "Test App",
+				WorkDir: tmpDir,
+				Services: []Service{
+					{Name: "s1", Command: "echo test", WorkDir: "nonexistent_subdir"},
+				},
+				Modes: map[string]Mode{"default": {Services: []string{"s1"}}},
+			},
+		},
+	}
+	loader := NewLoader("")
+	err := loader.validate(cfg)
+	if err == nil {
+		t.Error("validate() expected error for missing workdir")
+	}
+}
+
+func TestLoaderValidate_AppNameFromKey(t *testing.T) {
+	cfg := &AppConfig{
+		Version: "1.0",
+		Apps: map[string]AppSpec{
+			"my-key": {
+				Name:    "",
+				WorkDir: ".",
+				Services: []Service{{Name: "s1", Command: "echo test"}},
+				Modes:   map[string]Mode{"default": {Services: []string{"s1"}}},
+			},
+		},
+	}
+	loader := NewLoader("")
+	err := loader.validate(cfg)
+	if err != nil {
+		t.Fatalf("validate() unexpected error: %v", err)
+	}
+	if cfg.Apps["my-key"].Name != "my-key" {
+		t.Errorf("Apps[my-key].Name = %q, want my-key", cfg.Apps["my-key"].Name)
 	}
 }
 
@@ -314,10 +479,12 @@ func TestListApps(t *testing.T) {
 
 func TestLoaderResolveConfigPath(t *testing.T) {
 	tests := []struct {
-		name     string
-		explicit string
-		setup    func() (string, func())
-		wantErr  bool
+		name      string
+		explicit  string
+		useLocal  bool
+		setup     func() (string, func())
+		wantErr   bool
+		checkPath func(t *testing.T, got string)
 	}{
 		{
 			name:     "explicit path to existing file",
@@ -353,6 +520,28 @@ func TestLoaderResolveConfigPath(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name:     "DEVUP_DEFAULT_PROJECT when file exists",
+			explicit: "",
+			useLocal: false,
+			setup: func() (string, func()) {
+				tmpDir, _ := os.MkdirTemp("", "devup-test-*")
+				f := filepath.Join(tmpDir, "devup.yaml")
+				os.WriteFile(f, []byte("version: '1.0'\napps: {}"), 0644)
+				old := os.Getenv("DEVUP_DEFAULT_PROJECT")
+				os.Setenv("DEVUP_DEFAULT_PROJECT", tmpDir)
+				return "", func() {
+					os.Setenv("DEVUP_DEFAULT_PROJECT", old)
+					os.RemoveAll(tmpDir)
+				}
+			},
+			wantErr: false,
+			checkPath: func(t *testing.T, got string) {
+				if !strings.Contains(got, "devup.yaml") {
+					t.Errorf("resolveConfigPath() = %s, expected path containing devup.yaml", got)
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -360,7 +549,7 @@ func TestLoaderResolveConfigPath(t *testing.T) {
 			explicitPath, cleanup := tt.setup()
 			defer cleanup()
 
-			loader := NewLoader(explicitPath)
+			loader := NewLoaderWithLocal(explicitPath, tt.useLocal)
 			got, err := loader.resolveConfigPath()
 
 			if (err != nil) != tt.wantErr {
@@ -369,6 +558,9 @@ func TestLoaderResolveConfigPath(t *testing.T) {
 			}
 			if !tt.wantErr && got == "" {
 				t.Error("resolveConfigPath() returned empty path")
+			}
+			if tt.checkPath != nil && !tt.wantErr {
+				tt.checkPath(t, got)
 			}
 		})
 	}
