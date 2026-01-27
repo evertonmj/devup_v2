@@ -88,7 +88,7 @@ func (m *Manager) Start(ctx context.Context) error {
 	for _, serviceName := range startOrder {
 		if err := m.startService(ctx, serviceName, &modeConfig); err != nil {
 			// Rollback: stop already started services
-			m.stopAllServices(ctx)
+			_ = m.stopAllServices(ctx)
 			return fmt.Errorf("failed to start service '%s': %w", serviceName, err)
 		}
 	}

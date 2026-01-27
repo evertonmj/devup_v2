@@ -40,7 +40,7 @@ func NewDockerRunner(svc *config.Service, docker *config.DockerConfig, cwd strin
 
 	// Ensure logs directory exists
 	logDir := filepath.Dir(logFile)
-	os.MkdirAll(logDir, 0755)
+	_ = os.MkdirAll(logDir, 0755)
 
 	return &DockerRunner{
 		name:      svc.Name,
@@ -88,7 +88,7 @@ func (dr *DockerRunner) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to open log file %s: %w", dr.logFile, err)
 	}
-	defer logFilePtr.Close()
+	defer func() { _ = logFilePtr.Close() }()
 
 	cmd.Stdout = logFilePtr
 	cmd.Stderr = logFilePtr
@@ -101,7 +101,7 @@ func (dr *DockerRunner) Start(ctx context.Context) error {
 	dr.isStopped = false
 
 	// Log container start
-	fmt.Fprintf(logFilePtr, "[devup] Container started at %s\n", dr.startTime.Format(time.RFC3339))
+	_, _ = fmt.Fprintf(logFilePtr, "[devup] Container started at %s\n", dr.startTime.Format(time.RFC3339))
 
 	return nil
 }
