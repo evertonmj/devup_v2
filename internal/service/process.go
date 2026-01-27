@@ -47,19 +47,19 @@ func (c *CmdWrapper) SetSysProcAttr(attr *syscall.SysProcAttr) {
 }
 
 func (c *CmdWrapper) SetDir(dir string) {
-	c.Cmd.Dir = dir
+	c.Dir = dir
 }
 
 func (c *CmdWrapper) SetEnv(env []string) {
-	c.Cmd.Env = env
+	c.Env = env
 }
 
 func (c *CmdWrapper) SetStdout(stdout io.Writer) {
-	c.Cmd.Stdout = stdout
+	c.Stdout = stdout
 }
 
 func (c *CmdWrapper) SetStderr(stderr io.Writer) {
-	c.Cmd.Stderr = stderr
+	c.Stderr = stderr
 }
 
 func (c *CmdWrapper) Kill() error {
@@ -147,7 +147,7 @@ func (p *ProcessRunner) Start(ctx context.Context) error {
 	// Wait for service to be ready
 	if p.config.HealthCheck.Type != "" {
 		if err := p.waitForReady(ctx); err != nil {
-			p.Stop(ctx)
+			_ = p.Stop(ctx)
 			return err
 		}
 	}
@@ -168,7 +168,7 @@ func (p *ProcessRunner) Stop(ctx context.Context) error {
 	pgid, err := syscall.Getpgid(p.cmd.Process().Pid)
 	if err != nil {
 		// Process may already be dead, try killing it anyway
-		p.cmd.Kill()
+		_ = p.cmd.Kill()
 		return nil
 	}
 
@@ -176,20 +176,20 @@ func (p *ProcessRunner) Stop(ctx context.Context) error {
 	// This ensures all child processes (npm, node, etc.) are killed
 	if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil {
 		// If SIGTERM fails, force kill
-		syscall.Kill(-pgid, syscall.SIGKILL)
+		_ = syscall.Kill(-pgid, syscall.SIGKILL)
 	}
 
 	// Wait for monitor (which owns Wait) to finish, with timeout
 	select {
 	case <-time.After(3 * time.Second):
-		syscall.Kill(-pgid, syscall.SIGKILL)
+		_ = syscall.Kill(-pgid, syscall.SIGKILL)
 		<-p.monitorDone
 	case <-p.monitorDone:
 	}
 
 	// Close log file
 	if p.logFile != nil {
-		p.logFile.Close()
+		_ = p.logFile.Close()
 		p.logFile = nil
 	}
 
@@ -238,7 +238,7 @@ func (p *ProcessRunner) Logs() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	var lines []string
 	scanner := bufio.NewScanner(file)

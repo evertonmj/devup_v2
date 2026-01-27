@@ -105,11 +105,14 @@ func TestProcessRunnerStartStopStatusLogs(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(tmpDir, "logs"), 0755); err != nil {
 		t.Fatalf("mkdir logs: %v", err)
 	}
-	origWd, _ := os.Getwd()
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
 	if err := os.Chdir(tmpDir); err != nil {
 		t.Fatalf("chdir: %v", err)
 	}
-	defer os.Chdir(origWd)
+	defer func() { _ = os.Chdir(origWd) }()
 
 	ctx := context.Background()
 
@@ -157,9 +160,14 @@ func TestProcessRunnerStartStopStatusLogs(t *testing.T) {
 
 func TestProcessRunner_ExecHealthCheck(t *testing.T) {
 	tmpDir := t.TempDir()
-	origWd, _ := os.Getwd()
-	os.Chdir(tmpDir)
-	defer os.Chdir(origWd)
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(origWd) }()
 
 	svc := config.Service{
 		Name:    "healthsvc",
@@ -189,10 +197,15 @@ func TestProcessRunner_ExecHealthCheck(t *testing.T) {
 
 func TestProcessRunner_StartAlreadyRunning(t *testing.T) {
 	tmpDir := t.TempDir()
-	origWd, _ := os.Getwd()
-	os.Chdir(tmpDir)
-	defer os.Chdir(origWd)
-	os.MkdirAll("logs", 0755)
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(origWd) }()
+	_ = os.MkdirAll("logs", 0755)
 
 	svc := config.Service{Name: "s1", Command: "sleep 3", LogFile: "logs/s1.log"}
 	runner, _ := NewProcessRunner(svc, tmpDir)
@@ -200,7 +213,7 @@ func TestProcessRunner_StartAlreadyRunning(t *testing.T) {
 	if err := runner.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	defer runner.Stop(ctx)
+	defer func() { _ = runner.Stop(ctx) }()
 	if err := runner.Start(ctx); err == nil {
 		t.Error("Start expected error when already running")
 	} else if !strings.Contains(err.Error(), "already running") {
