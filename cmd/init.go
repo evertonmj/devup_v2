@@ -60,12 +60,29 @@ func runInit(cmd *cobra.Command, args []string) error {
 	runInstallPhase := !onlyInit && !onlySetup
 	runSetupPhase := !onlyInit && !onlyInstall
 
-	// Phase 1: Initialize (create devup.yaml)
-	if runInitPhase {
-		if _, err := os.Stat(configPath); err == nil && !initForce {
+	// Check if devup.yaml already exists
+	configExists := false
+	if _, err := os.Stat(configPath); err == nil {
+		configExists = true
+	}
+
+	// Handle existing config file
+	if configExists && !initForce {
+		// If user wants only init phase, error out
+		if onlyInit {
 			return fmt.Errorf("devup.yaml already exists. Use --force to overwrite")
 		}
+		// For full init or when install/setup requested, skip init phase but continue
+		if runInitPhase {
+			fmt.Println("ℹ️  devup.yaml already exists, skipping file generation...")
+			fmt.Println("   (Use --force to regenerate the file)")
+			fmt.Println()
+			runInitPhase = false
+		}
+	}
 
+	// Phase 1: Initialize (create devup.yaml)
+	if runInitPhase {
 		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 		fmt.Println("🚀 DevUp Project Initialization")
 		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -918,15 +935,124 @@ func generateConfig(info *ProjectInfo) string {
 	// Add hooks
 	sb.WriteString("\n    install:\n")
 	sb.WriteString("      steps:\n")
-	if info.PackageMgr == "npm" {
-		sb.WriteString("        - name: \"Install npm dependencies\"\n")
-		sb.WriteString("          command: \"npm install\"\n")
-	} else if info.PackageMgr == "go" {
-		sb.WriteString("        - name: \"Download Go modules\"\n")
-		sb.WriteString("          command: \"go mod download\"\n")
-	} else if info.PackageMgr == "pip" {
-		sb.WriteString("        - name: \"Install Python dependencies\"\n")
-		sb.WriteString("          command: \"pip install -r requirements.txt\"\n")
+
+	// Root-level package manager steps using commands arrays
+	// Always check for common manifests to ensure root installs are included
+	if _, err := os.Stat("package.json"); err == nil || info.PackageMgr == "npm" {
+		sb.WriteString("        - name: \"Install npm dependencies (root)\"\n")
+		sb.WriteString("          commands:\n")
+		sb.WriteString("            - \"npm install\"\n")
+	}
+	if _, err := os.Stat("go.mod"); err == nil || info.PackageMgr == "go" {
+		sb.WriteString("        - name: \"Download Go modules (root)\"\n")
+		sb.WriteString("          commands:\n")
+		sb.WriteString("            - \"go mod download\"\n")
+	}
+	if _, err := os.Stat("requirements.txt"); err == nil || info.PackageMgr == "pip" {
+		sb.WriteString("        - name: \"Install Python dependencies (root)\"\n")
+		sb.WriteString("          commands:\n")
+		sb.WriteString("            - \"pip install -r requirements.txt\"\n")
+	}
+	if _, err := os.Stat("Pipfile"); err == nil || info.PackageMgr == "pipenv" {
+		sb.WriteString("        - name: \"Install Pipenv dependencies (root)\"\n")
+		sb.WriteString("          commands:\n")
+		sb.WriteString("            - \"pipenv install\"\n")
+	}
+	if _, err := os.Stat("Cargo.toml"); err == nil || info.PackageMgr == "cargo" {
+		sb.WriteString("        - name: \"Build Rust dependencies (root)\"\n")
+		sb.WriteString("          commands:\n")
+		sb.WriteString("            - \"cargo build\"\n")
+	}
+	if _, err := os.Stat("pom.xml"); err == nil || info.PackageMgr == "maven" {
+		sb.WriteString("        - name: \"Resolve Maven dependencies (root)\"\n")
+		sb.WriteString("          commands:\n")
+		sb.WriteString("            - \"mvn -q -DskipTests package\"\n")
+	}
+	if _, err := os.Stat("build.gradle"); err == nil || info.PackageMgr == "gradle" {
+		sb.WriteString("        - name: \"Resolve Gradle dependencies (root)\"\n")
+		sb.WriteString("          commands:\n")
+		sb.WriteString("            - \"gradle build -x test\"\n")
+	}
+	if _, err := os.Stat("Gemfile"); err == nil || info.PackageMgr == "bundle" {
+		sb.WriteString("        - name: \"Install Ruby gems (root)\"\n")
+		sb.WriteString("          commands:\n")
+		sb.WriteString("            - \"bundle install\"\n")
+	}
+	if _, err := os.Stat("composer.json"); err == nil || info.PackageMgr == "composer" {
+		sb.WriteString("        - name: \"Install Composer packages (root)\"\n")
+		sb.WriteString("          commands:\n")
+		sb.WriteString("            - \"composer install\"\n")
+	}
+
+	// Per-service installs: add a step with workdir for each detected service
+	for _, svc := range info.Services {
+		wd := svc.Directory
+		if wd == "" {
+			wd = "."
+		}
+		// npm
+		if _, err := os.Stat(filepath.Join(wd, "package.json")); err == nil {
+			sb.WriteString(fmt.Sprintf("        - name: \"Install npm dependencies (%s)\"\n", svc.Name))
+			sb.WriteString(fmt.Sprintf("          workdir: \"%s\"\n", wd))
+			sb.WriteString("          commands:\n")
+			sb.WriteString("            - \"npm install\"\n")
+		}
+		// Go
+		if _, err := os.Stat(filepath.Join(wd, "go.mod")); err == nil {
+			sb.WriteString(fmt.Sprintf("        - name: \"Download Go modules (%s)\"\n", svc.Name))
+			sb.WriteString(fmt.Sprintf("          workdir: \"%s\"\n", wd))
+			sb.WriteString("          commands:\n")
+			sb.WriteString("            - \"go mod download\"\n")
+		}
+		// Python requirements
+		if _, err := os.Stat(filepath.Join(wd, "requirements.txt")); err == nil {
+			sb.WriteString(fmt.Sprintf("        - name: \"Install Python dependencies (%s)\"\n", svc.Name))
+			sb.WriteString(fmt.Sprintf("          workdir: \"%s\"\n", wd))
+			sb.WriteString("          commands:\n")
+			sb.WriteString("            - \"pip install -r requirements.txt\"\n")
+		}
+		// Pipenv
+		if _, err := os.Stat(filepath.Join(wd, "Pipfile")); err == nil {
+			sb.WriteString(fmt.Sprintf("        - name: \"Install Pipenv dependencies (%s)\"\n", svc.Name))
+			sb.WriteString(fmt.Sprintf("          workdir: \"%s\"\n", wd))
+			sb.WriteString("          commands:\n")
+			sb.WriteString("            - \"pipenv install\"\n")
+		}
+		// Cargo
+		if _, err := os.Stat(filepath.Join(wd, "Cargo.toml")); err == nil {
+			sb.WriteString(fmt.Sprintf("        - name: \"Build Rust dependencies (%s)\"\n", svc.Name))
+			sb.WriteString(fmt.Sprintf("          workdir: \"%s\"\n", wd))
+			sb.WriteString("          commands:\n")
+			sb.WriteString("            - \"cargo build\"\n")
+		}
+		// Maven
+		if _, err := os.Stat(filepath.Join(wd, "pom.xml")); err == nil {
+			sb.WriteString(fmt.Sprintf("        - name: \"Resolve Maven dependencies (%s)\"\n", svc.Name))
+			sb.WriteString(fmt.Sprintf("          workdir: \"%s\"\n", wd))
+			sb.WriteString("          commands:\n")
+			sb.WriteString("            - \"mvn -q -DskipTests package\"\n")
+		}
+		// Gradle
+		if _, err := os.Stat(filepath.Join(wd, "build.gradle")); err == nil {
+			sb.WriteString(fmt.Sprintf("        - name: \"Resolve Gradle dependencies (%s)\"\n", svc.Name))
+			sb.WriteString(fmt.Sprintf("          workdir: \"%s\"\n", wd))
+			sb.WriteString("          commands:\n")
+			sb.WriteString("            - \"gradle build -x test\"\n")
+		}
+		// Ruby Bundler
+		if _, err := os.Stat(filepath.Join(wd, "Gemfile")); err == nil {
+			sb.WriteString(fmt.Sprintf("        - name: \"Install Ruby gems (%s)\"\n", svc.Name))
+			sb.WriteString(fmt.Sprintf("          workdir: \"%s\"\n", wd))
+			sb.WriteString("          commands:\n")
+			sb.WriteString("            - \"bundle install\"\n")
+		}
+		// Composer
+		if _, err := os.Stat(filepath.Join(wd, "composer.json")); err == nil {
+			sb.WriteString(fmt.Sprintf("        - name: \"Install Composer packages (%s)\"\n", svc.Name))
+			sb.WriteString(fmt.Sprintf("          workdir: \"%s\"\n", wd))
+			sb.WriteString("          commands:\n")
+			sb.WriteString("            - \"composer install\"\n")
+		}
 	}
 
 	sb.WriteString("\n    hooks:\n")
