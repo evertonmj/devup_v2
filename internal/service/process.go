@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"devup/internal/config"
+	"devup/internal/log"
 )
 
 // Commander is an interface that abstracts the os/exec.Cmd behavior.
@@ -47,19 +48,19 @@ func (c *CmdWrapper) SetSysProcAttr(attr *syscall.SysProcAttr) {
 }
 
 func (c *CmdWrapper) SetDir(dir string) {
-	c.Cmd.Dir = dir
+	c.Dir = dir
 }
 
 func (c *CmdWrapper) SetEnv(env []string) {
-	c.Cmd.Env = env
+	c.Env = env
 }
 
 func (c *CmdWrapper) SetStdout(stdout io.Writer) {
-	c.Cmd.Stdout = stdout
+	c.Stdout = stdout
 }
 
 func (c *CmdWrapper) SetStderr(stderr io.Writer) {
-	c.Cmd.Stderr = stderr
+	c.Stderr = stderr
 }
 
 func (c *CmdWrapper) Kill() error {
@@ -76,12 +77,13 @@ var newCommand = func(ctx context.Context, name string, arg ...string) Commander
 
 // ProcessRunner manages a single process-based service
 type ProcessRunner struct {
-	config    config.Service
-	workDir   string
-	cmd       Commander
-	logFile   *os.File
-	startTime time.Time
-	mu        sync.Mutex
+	config      config.Service
+	workDir     string
+	cmd         Commander
+	logFile     *os.File
+	startTime   time.Time
+	mu          sync.Mutex
+	monitorDone chan struct{} // closed when monitor goroutine finishes
 }
 
 // NewProcessRunner creates a new process runner for a service
@@ -138,6 +140,7 @@ func (p *ProcessRunner) Start(ctx context.Context) error {
 
 	p.cmd = cmd
 	p.startTime = time.Now()
+	p.monitorDone = make(chan struct{})
 
 	// Monitor process in background
 	go p.monitor()
@@ -145,7 +148,7 @@ func (p *ProcessRunner) Start(ctx context.Context) error {
 	// Wait for service to be ready
 	if p.config.HealthCheck.Type != "" {
 		if err := p.waitForReady(ctx); err != nil {
-			p.Stop(ctx)
+			_ = p.Stop(ctx)
 			return err
 		}
 	}
@@ -166,7 +169,7 @@ func (p *ProcessRunner) Stop(ctx context.Context) error {
 	pgid, err := syscall.Getpgid(p.cmd.Process().Pid)
 	if err != nil {
 		// Process may already be dead, try killing it anyway
-		p.cmd.Kill()
+		_ = p.cmd.Kill()
 		return nil
 	}
 
@@ -174,27 +177,20 @@ func (p *ProcessRunner) Stop(ctx context.Context) error {
 	// This ensures all child processes (npm, node, etc.) are killed
 	if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil {
 		// If SIGTERM fails, force kill
-		syscall.Kill(-pgid, syscall.SIGKILL)
+		_ = syscall.Kill(-pgid, syscall.SIGKILL)
 	}
 
-	// Wait for graceful shutdown with timeout
-	done := make(chan error, 1)
-	go func() {
-		done <- p.cmd.Wait()
-	}()
-
+	// Wait for monitor (which owns Wait) to finish, with timeout
 	select {
 	case <-time.After(3 * time.Second):
-		// Force kill after timeout
-		syscall.Kill(-pgid, syscall.SIGKILL)
-		<-done
-	case <-done:
-		// Process exited gracefully
+		_ = syscall.Kill(-pgid, syscall.SIGKILL)
+		<-p.monitorDone
+	case <-p.monitorDone:
 	}
 
 	// Close log file
 	if p.logFile != nil {
-		p.logFile.Close()
+		_ = p.logFile.Close()
 		p.logFile = nil
 	}
 
@@ -243,7 +239,7 @@ func (p *ProcessRunner) Logs() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	var lines []string
 	scanner := bufio.NewScanner(file)
@@ -302,15 +298,16 @@ func (p *ProcessRunner) setupLogging(cmd Commander) error {
 	return nil
 }
 
-// monitor watches the process and handles unexpected exits
+// monitor watches the process and handles unexpected exits.
+// It is the only goroutine that calls Wait on the Cmd; Stop waits for monitorDone.
 func (p *ProcessRunner) monitor() {
+	defer close(p.monitorDone)
 	if p.cmd == nil {
 		return
 	}
-
 	err := p.cmd.Wait()
 	if err != nil {
-		fmt.Printf("Service '%s' exited with error: %v\n", p.config.Name, err)
+		log.Errorf("Service '%s' exited with error: %v", p.config.Name, err)
 	}
 }
 

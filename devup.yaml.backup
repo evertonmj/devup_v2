@@ -13,13 +13,13 @@ apps:
         port: 3000
         logfile: "logs/app.log"
         environment:
-          DEVUP_DEFAULT_PROJECT: changeme
+          DEVUP_DEFAULT_PROJECT: "changeme"
 
 
     setup:
       env_vars:
         - name: "DEVUP_DEFAULT_PROJECT"
-          default: changeme
+          default: "changeme"
           required: false
     modes:
       default:
@@ -30,13 +30,8 @@ apps:
 
     install:
       steps:
-        - name: "Download Go modules (root)"
-          commands:
-            - "go mod download"
-        - name: "Download Go modules (app)"
-          workdir: "."
-          commands:
-            - "go mod download"
+        - name: "Download Go modules"
+          command: "go mod download"
 
     hooks:
       pre_start:

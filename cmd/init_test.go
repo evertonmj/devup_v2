@@ -55,7 +55,7 @@ func TestDetectPackageManager(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Failed to create test file: %v", err)
 				}
-				f.Close()
+				_ = f.Close()
 			}
 
 			// Test detection
@@ -280,10 +280,11 @@ func TestGenerateConfig(t *testing.T) {
 						Port:    8000,
 					},
 					{
-						Name:    "frontend",
-						Type:    "web",
-						Command: "npm run dev",
-						Port:    3000,
+						Name:         "frontend",
+						Type:         "web",
+						Command:      "npm run dev",
+						Port:         3000,
+						Dependencies: []string{"backend"},
 					},
 				},
 			},
@@ -325,8 +326,12 @@ export SECRET_KEY=mysecret
 
 The app runs on port 3000
 `
-	os.WriteFile(filepath.Join(tmpDir, "README.md"), []byte(readme), 0644)
-	os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte(`{"name": "test"}`), 0644)
+	if err := os.WriteFile(filepath.Join(tmpDir, "README.md"), []byte(readme), 0644); err != nil {
+		t.Fatalf("write README: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte(`{"name": "test"}`), 0644); err != nil {
+		t.Fatalf("write package.json: %v", err)
+	}
 
 	// Run scan
 	info, err := scanProject(tmpDir)

@@ -42,8 +42,9 @@
 
 ## 📦 Installation
 
+```bash
 git clone https://github.com/evertonmj/devup_v2.git
-cd devup
+cd devup_v2
 
 # Build the binary
 make build
@@ -54,6 +55,12 @@ make install
 # Verify installation
 devup --version
 ```
+
+### Prerequisites
+
+- Docker Desktop (required to run services with `type: docker`). Ensure Docker is installed and the daemon is running before starting docker-backed services.
+- Node.js, Python, or other language runtimes as required by your project.
+
 
 ### Using Go Install
 
@@ -79,6 +86,8 @@ devup init
 # Start your services
 devup start
 ```
+
+Note: If your configuration includes docker services, make sure Docker Desktop is running. DevUp will show a friendly error if Docker is unavailable.
 
 DevUp will intelligently scan your project and create a complete `devup.yaml` with:
 
@@ -137,6 +146,10 @@ apps:
           - backend
           - frontend
 ```
+
+### Clean Command Behavior
+
+By default, `devup clean` removes logs and setup-created directories only. It does not remove your `.env` file unless you pass `--env` or `--all` explicitly.
 
 ### 2. Set Default Project (Optional)
 
@@ -477,7 +490,7 @@ DevUp is built with extensibility as a core principle:
 └─────────────────────────────────────┘
 ```
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed technical documentation.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed technical documentation.
 
 ---
 
