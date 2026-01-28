@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"devup/internal/config"
+	"devup/internal/log"
 )
 
 // DockerRunner implements ServiceRunner for Docker containers
@@ -116,14 +117,14 @@ func (dr *DockerRunner) Stop(ctx context.Context) error {
 	stopCmd := exec.CommandContext(ctx, "docker", "stop", "-t", "10", dr.container)
 	if err := stopCmd.Run(); err != nil {
 		// Container might not exist, which is okay
-		fmt.Printf("warning: failed to stop container %s: %v\n", dr.container, err)
+		log.Errorf("failed to stop container %s: %v", dr.container, err)
 	}
 
 	// Remove container if configured
 	if dr.docker.Remove {
 		removeCmd := exec.CommandContext(ctx, "docker", "rm", "-f", dr.container)
 		if err := removeCmd.Run(); err != nil {
-			fmt.Printf("warning: failed to remove container %s: %v\n", dr.container, err)
+			log.Errorf("failed to remove container %s: %v", dr.container, err)
 		}
 	}
 

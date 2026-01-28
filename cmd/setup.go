@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"devup/internal/config"
+	"devup/internal/log"
 )
 
 var (
@@ -301,7 +302,7 @@ func generateEnvFile(app *config.AppSpec, isDryRun bool) error {
 				if envVar.Required && !skipPrompts {
 					return fmt.Errorf("failed to generate required variable %s: %w", envVar.Name, err)
 				}
-				fmt.Printf("  ⚠️  Failed to generate %s\n", envVar.Name)
+				log.Errorf("Failed to generate env var %s: %v", envVar.Name, err)
 				continue
 			}
 			value = strings.TrimSpace(string(output))
@@ -385,10 +386,11 @@ func runSetupChecks(app *config.AppSpec) error {
 
 		if err := cmd.Run(); err != nil {
 			allPassed = false
-			fmt.Printf("  ❌ %s\n", check.Name)
+			msg := check.Name
 			if check.Message != "" {
-				fmt.Printf("     %s\n", check.Message)
+				msg += ": " + check.Message
 			}
+			log.Errorf("validation check failed: %s: %v", msg, err)
 		} else {
 			fmt.Printf("  ✅ %s\n", check.Name)
 		}

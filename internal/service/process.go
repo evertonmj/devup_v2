@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"devup/internal/config"
+	"devup/internal/log"
 )
 
 // Commander is an interface that abstracts the os/exec.Cmd behavior.
@@ -306,7 +307,7 @@ func (p *ProcessRunner) monitor() {
 	}
 	err := p.cmd.Wait()
 	if err != nil {
-		fmt.Printf("Service '%s' exited with error: %v\n", p.config.Name, err)
+		log.Errorf("Service '%s' exited with error: %v", p.config.Name, err)
 	}
 }
 

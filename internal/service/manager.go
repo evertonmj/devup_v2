@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"devup/internal/config"
+	"devup/internal/log"
 )
 
 // Get current working directory at manager creation
@@ -340,6 +341,7 @@ func (m *Manager) executeHooks(hooks []string) error {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
+			log.Errorf("hook failed: %s: %v", hook, err)
 			return fmt.Errorf("hook failed: %s: %w", hook, err)
 		}
 	}

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"devup/internal/config"
+	"devup/internal/log"
 
 	"github.com/spf13/cobra"
 )
@@ -176,7 +177,7 @@ func cleanPath(path string, description string, dryRun bool) (removed int, faile
 		return 0, 1
 	}
 	if err != nil {
-		fmt.Printf("  ❌ %s: %s (error: %v)\n", description, path, err)
+		log.Errorf("%s: %s (error: %v)", description, path, err)
 		return 0, 1
 	}
 
@@ -191,7 +192,7 @@ func cleanPath(path string, description string, dryRun bool) (removed int, faile
 
 	// Remove the path
 	if err := os.RemoveAll(path); err != nil {
-		fmt.Printf("  ❌ Failed to remove %s: %s (%v)\n", description, path, err)
+		log.Errorf("Failed to remove %s: %s (%v)", description, path, err)
 		return 0, 1
 	}
 

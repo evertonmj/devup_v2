@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"devup/internal/config"
+	"devup/internal/log"
 )
 
 var (
@@ -159,7 +160,7 @@ func installDependencies(app *config.AppSpec, isDryRun bool) error {
 					if !dep.Optional {
 						return fmt.Errorf("failed to install %s: %w", dep.Name, err)
 					}
-					fmt.Printf("     ⚠️  Failed to install optional dependency %s: %v\n", dep.Name, err)
+					log.Errorf("Failed to install optional dependency %s: %v", dep.Name, err)
 				} else {
 					fmt.Printf("     ✅ Installed %s\n", dep.Name)
 				}
