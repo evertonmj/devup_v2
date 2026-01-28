@@ -368,3 +368,133 @@ func findSubstring(s, substr string) bool {
 	}
 	return false
 }
+
+func TestExtractAppVarName(t *testing.T) {
+	tests := []struct {
+		line string
+		want string
+	}{
+		{"app = FastAPI()", "app"},
+		{"api = FastAPI()", "api"},
+		{"application = Application()", "application"},
+		{"  app = FastAPI()", "app"},
+		{"if app = FastAPI()", ""},
+		{"x, app = 1, FastAPI()", ""},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		got := extractAppVarName(tt.line)
+		if got != tt.want {
+			t.Errorf("extractAppVarName(%q) = %q, want %q", tt.line, got, tt.want)
+		}
+	}
+}
+
+func TestResolveUvicornApp(t *testing.T) {
+	t.Run("main_app", func(t *testing.T) {
+		tmp := t.TempDir()
+		_ = os.WriteFile(filepath.Join(tmp, "main.py"), []byte("from fastapi import FastAPI\napp = FastAPI()\n"), 0644)
+		mod, appName := resolveUvicornApp(tmp)
+		if mod != "main" || appName != "app" {
+			t.Errorf("resolveUvicornApp() = %q, %q; want main, app", mod, appName)
+		}
+	})
+	t.Run("app_main", func(t *testing.T) {
+		tmp := t.TempDir()
+		_ = os.MkdirAll(filepath.Join(tmp, "app"), 0755)
+		_ = os.WriteFile(filepath.Join(tmp, "app", "main.py"), []byte("api = FastAPI()\n"), 0644)
+		mod, appName := resolveUvicornApp(tmp)
+		if mod != "app.main" || appName != "api" {
+			t.Errorf("resolveUvicornApp() = %q, %q; want app.main, api", mod, appName)
+		}
+	})
+	t.Run("fallback", func(t *testing.T) {
+		tmp := t.TempDir()
+		mod, appName := resolveUvicornApp(tmp)
+		if mod != "main" || appName != "app" {
+			t.Errorf("resolveUvicornApp() = %q, %q; want main, app (fallback)", mod, appName)
+		}
+	})
+}
+
+func TestDetectFrameworks(t *testing.T) {
+	t.Run("uvicorn_fastapi", func(t *testing.T) {
+		tmp := t.TempDir()
+		_ = os.WriteFile(filepath.Join(tmp, "requirements.txt"), []byte("fastapi\nuvicorn\n"), 0644)
+		_ = os.WriteFile(filepath.Join(tmp, "main.py"), []byte("app = FastAPI()\n"), 0644)
+		info := &ProjectInfo{
+			Services: []ServiceInfo{
+				{Name: "api", Type: "process", Command: "python main.py", Language: "python", Directory: "."},
+			},
+		}
+		detectFrameworks(tmp, info)
+		svc := &info.Services[0]
+		if svc.Framework != "uvicorn" {
+			t.Errorf("Framework = %q, want uvicorn", svc.Framework)
+		}
+		if !findSubstring(svc.Command, "uvicorn") || !findSubstring(svc.Command, "main:app") {
+			t.Errorf("Command = %q, want uvicorn ... main:app ...", svc.Command)
+		}
+	})
+	t.Run("flask", func(t *testing.T) {
+		tmp := t.TempDir()
+		_ = os.WriteFile(filepath.Join(tmp, "requirements.txt"), []byte("flask\n"), 0644)
+		info := &ProjectInfo{
+			Services: []ServiceInfo{
+				{Name: "web", Type: "process", Command: "python app.py", Language: "python", Directory: "."},
+			},
+		}
+		detectFrameworks(tmp, info)
+		svc := &info.Services[0]
+		if svc.Framework != "flask" {
+			t.Errorf("Framework = %q, want flask", svc.Framework)
+		}
+		if svc.Command != "flask run --host=0.0.0.0" {
+			t.Errorf("Command = %q, want flask run --host=0.0.0.0", svc.Command)
+		}
+	})
+	t.Run("django", func(t *testing.T) {
+		tmp := t.TempDir()
+		_ = os.WriteFile(filepath.Join(tmp, "requirements.txt"), []byte("django\n"), 0644)
+		_ = os.WriteFile(filepath.Join(tmp, "manage.py"), []byte("#!/usr/bin/env python\n"), 0644)
+		info := &ProjectInfo{
+			Services: []ServiceInfo{
+				{Name: "app", Type: "process", Port: 8000, Language: "python", Directory: "."},
+			},
+		}
+		detectFrameworks(tmp, info)
+		svc := &info.Services[0]
+		if svc.Framework != "django" {
+			t.Errorf("Framework = %q, want django", svc.Framework)
+		}
+		if !findSubstring(svc.Command, "manage.py runserver") {
+			t.Errorf("Command = %q, want manage.py runserver ...", svc.Command)
+		}
+	})
+	t.Run("uvicorn_over_flask", func(t *testing.T) {
+		tmp := t.TempDir()
+		_ = os.WriteFile(filepath.Join(tmp, "requirements.txt"), []byte("flask\nfastapi\n"), 0644)
+		info := &ProjectInfo{
+			Services: []ServiceInfo{
+				{Name: "api", Type: "process", Language: "python", Directory: "."},
+			},
+		}
+		detectFrameworks(tmp, info)
+		if info.Services[0].Framework != "uvicorn" {
+			t.Errorf("Framework = %q, want uvicorn (prefer over flask)", info.Services[0].Framework)
+		}
+	})
+	t.Run("skip_docker", func(t *testing.T) {
+		tmp := t.TempDir()
+		_ = os.WriteFile(filepath.Join(tmp, "requirements.txt"), []byte("fastapi\n"), 0644)
+		info := &ProjectInfo{
+			Services: []ServiceInfo{
+				{Name: "db", Type: "docker", DockerImage: "postgres:15", Directory: "."},
+			},
+		}
+		detectFrameworks(tmp, info)
+		if info.Services[0].Command != "" {
+			t.Errorf("docker service Command should be unchanged, got %q", info.Services[0].Command)
+		}
+	})
+}

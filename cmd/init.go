@@ -239,6 +239,8 @@ type ServiceInfo struct {
 	DockerEnvironment map[string]string
 	// Language hint (e.g., "python", "node", "go")
 	Language string
+	// Framework hint (e.g., "uvicorn", "flask", "django") used to set command
+	Framework string
 }
 
 func scanProject(dir string) (*ProjectInfo, error) {
@@ -262,6 +264,9 @@ func scanProject(dir string) (*ProjectInfo, error) {
 
 	// Detect ports and services
 	detectServices(dir, info)
+
+	// Detect frameworks and set start commands accordingly (e.g. uvicorn, flask, django)
+	detectFrameworks(dir, info)
 
 	// Infer related backing services like databases
 	detectDatabaseServices(dir, info)
@@ -460,6 +465,144 @@ func detectServices(dir string, info *ProjectInfo) {
 			}
 		}
 	}
+}
+
+// detectFrameworks detects web/server frameworks (e.g. uvicorn, flask, django) per service
+// and overrides the service command so they are started accordingly.
+func detectFrameworks(dir string, info *ProjectInfo) {
+	for i := range info.Services {
+		svc := &info.Services[i]
+		if svc.Type == "docker" && svc.DockerImage != "" {
+			continue
+		}
+		base := dir
+		if svc.Directory != "" && svc.Directory != "." {
+			base = filepath.Join(dir, svc.Directory)
+		}
+		detectPythonFramework(base, svc)
+	}
+}
+
+// detectPythonFramework checks requirements.txt/pyproject.toml and Python files in base
+// for uvicorn/fastapi, flask, or django, and sets svc.Command and svc.Framework.
+func detectPythonFramework(base string, svc *ServiceInfo) {
+	reqPath := filepath.Join(base, "requirements.txt")
+	pyprojectPath := filepath.Join(base, "pyproject.toml")
+	req := readFileIfExists(reqPath)
+	pyproject := readFileIfExists(pyprojectPath)
+	if req == "" && pyproject == "" {
+		return
+	}
+	lower := strings.ToLower(req + "\n" + pyproject)
+
+	hasUvicorn := strings.Contains(lower, "uvicorn") || strings.Contains(lower, "fastapi")
+	hasFlask := strings.Contains(lower, "flask")
+	hasDjango := strings.Contains(lower, "django")
+	managePy := readFileIfExists(filepath.Join(base, "manage.py")) != ""
+
+	// Prefer uvicorn/fastapi, then flask, then django
+	if hasUvicorn {
+		module, appName := resolveUvicornApp(base)
+		cmd := fmt.Sprintf("uvicorn %s:%s --reload --host 0.0.0.0", module, appName)
+		svc.Command = cmd
+		svc.Framework = "uvicorn"
+		return
+	}
+	if hasFlask {
+		svc.Command = "flask run --host=0.0.0.0"
+		svc.Framework = "flask"
+		return
+	}
+	if hasDjango || managePy {
+		port := 8000
+		if svc.Port > 0 {
+			port = svc.Port
+		}
+		svc.Command = fmt.Sprintf("python manage.py runserver 0.0.0.0:%d", port)
+		svc.Framework = "django"
+	}
+}
+
+// resolveUvicornApp scans Python files for FastAPI/Starlette app and returns "module:app".
+// Defaults to "main:app" if not found.
+func resolveUvicornApp(base string) (module, appName string) {
+	candidates := []string{"main.py", "app.py", "app/main.py", "src/main.py", "application.py"}
+	for _, rel := range candidates {
+		p := filepath.Join(base, rel)
+		data := readFileIfExists(p)
+		if data == "" {
+			continue
+		}
+		mod := strings.TrimSuffix(rel, ".py")
+		mod = strings.ReplaceAll(mod, string(filepath.Separator), ".")
+		// Look for app = FastAPI(...) or app = Application(...) or similar
+		lines := strings.Split(data, "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "#") {
+				continue
+			}
+			// app = FastAPI( or app = APIRouter( typically not the asgi app
+			if strings.Contains(line, "FastAPI(") || strings.Contains(line, "Application(") {
+				name := extractAppVarName(line)
+				if name != "" {
+					return mod, name
+				}
+			}
+		}
+	}
+	// Fallback: scan any *.py in base for FastAPI
+	entries, err := os.ReadDir(base)
+	if err != nil {
+		return "main", "app"
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(strings.ToLower(e.Name()), ".py") {
+			continue
+		}
+		data := readFileIfExists(filepath.Join(base, e.Name()))
+		if data == "" {
+			continue
+		}
+		mod := strings.TrimSuffix(e.Name(), ".py")
+		lines := strings.Split(data, "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "#") {
+				continue
+			}
+			if strings.Contains(line, "FastAPI(") || strings.Contains(line, "Application(") {
+				name := extractAppVarName(line)
+				if name != "" {
+					return mod, name
+				}
+			}
+		}
+	}
+	return "main", "app"
+}
+
+func extractAppVarName(line string) string {
+	// "app = FastAPI()" or "application = FastAPI()" or "api = FastAPI()"
+	idx := strings.Index(line, "=")
+	if idx < 0 {
+		return ""
+	}
+	left := strings.TrimSpace(line[:idx])
+	// avoid "if app = ..." etc.
+	for _, bad := range []string{"if", "elif", "for", "while", "("} {
+		if strings.HasPrefix(left, bad) {
+			return ""
+		}
+	}
+	// single identifier
+	if strings.Contains(left, " ") || strings.Contains(left, ".") {
+		return ""
+	}
+	if left != "" {
+		return left
+	}
+	return ""
 }
 
 // detectDatabaseServices scans project files and environment for common database usage
