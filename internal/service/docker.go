@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"devup/internal/config"
+	"devup/internal/log"
 )
 
 // DockerRunner implements ServiceRunner for Docker containers
@@ -40,7 +41,7 @@ func NewDockerRunner(svc *config.Service, docker *config.DockerConfig, cwd strin
 
 	// Ensure logs directory exists
 	logDir := filepath.Dir(logFile)
-	os.MkdirAll(logDir, 0755)
+	_ = os.MkdirAll(logDir, 0755)
 
 	return &DockerRunner{
 		name:      svc.Name,
@@ -56,6 +57,20 @@ func NewDockerRunner(svc *config.Service, docker *config.DockerConfig, cwd strin
 func (dr *DockerRunner) Start(ctx context.Context) error {
 	if !dr.isStopped {
 		return fmt.Errorf("container %s is already running", dr.container)
+	}
+
+	// Check docker availability
+	if _, err := exec.LookPath("docker"); err != nil {
+		return fmt.Errorf("docker is not installed or not in PATH. Please install Docker Desktop and ensure it's running")
+	}
+	// Check docker daemon status with a short timeout
+	{
+		checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+		verCmd := exec.CommandContext(checkCtx, "docker", "info")
+		if err := verCmd.Run(); err != nil {
+			return fmt.Errorf("docker daemon is not running. Start Docker Desktop before running docker services")
+		}
 	}
 
 	// Build docker run command
@@ -74,7 +89,7 @@ func (dr *DockerRunner) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to open log file %s: %w", dr.logFile, err)
 	}
-	defer logFilePtr.Close()
+	defer func() { _ = logFilePtr.Close() }()
 
 	cmd.Stdout = logFilePtr
 	cmd.Stderr = logFilePtr
@@ -87,7 +102,7 @@ func (dr *DockerRunner) Start(ctx context.Context) error {
 	dr.isStopped = false
 
 	// Log container start
-	fmt.Fprintf(logFilePtr, "[devup] Container started at %s\n", dr.startTime.Format(time.RFC3339))
+	_, _ = fmt.Fprintf(logFilePtr, "[devup] Container started at %s\n", dr.startTime.Format(time.RFC3339))
 
 	return nil
 }
@@ -102,14 +117,14 @@ func (dr *DockerRunner) Stop(ctx context.Context) error {
 	stopCmd := exec.CommandContext(ctx, "docker", "stop", "-t", "10", dr.container)
 	if err := stopCmd.Run(); err != nil {
 		// Container might not exist, which is okay
-		fmt.Printf("warning: failed to stop container %s: %v\n", dr.container, err)
+		log.Errorf("failed to stop container %s: %v", dr.container, err)
 	}
 
 	// Remove container if configured
 	if dr.docker.Remove {
 		removeCmd := exec.CommandContext(ctx, "docker", "rm", "-f", dr.container)
 		if err := removeCmd.Run(); err != nil {
-			fmt.Printf("warning: failed to remove container %s: %v\n", dr.container, err)
+			log.Errorf("failed to remove container %s: %v", dr.container, err)
 		}
 	}
 
@@ -117,8 +132,8 @@ func (dr *DockerRunner) Stop(ctx context.Context) error {
 
 	// Log container stop
 	if f, err := os.OpenFile(dr.logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
-		defer f.Close()
-		fmt.Fprintf(f, "[devup] Container stopped at %s (duration: %v)\n",
+		defer func() { _ = f.Close() }()
+		_, _ = fmt.Fprintf(f, "[devup] Container stopped at %s (duration: %v)\n",
 			time.Now().Format(time.RFC3339), time.Since(dr.startTime))
 	}
 
@@ -130,11 +145,7 @@ func (dr *DockerRunner) Status() ServiceStatus {
 	// Check if container is running
 	inspectCmd := exec.Command("docker", "inspect", "-f", "{{.State.Running}}", dr.container)
 	output, err := inspectCmd.CombinedOutput()
-
-	running := false
-	if err == nil && strings.TrimSpace(string(output)) == "true" {
-		running = true
-	}
+	running := err == nil && strings.TrimSpace(string(output)) == "true"
 
 	return ServiceStatus{
 		Name:      dr.name,
@@ -212,7 +223,7 @@ func (dr *DockerRunner) buildDockerRunCommand() []string {
 	// Pull image before running
 	if dr.docker.Pull {
 		pullCmd := exec.Command("docker", "pull", dr.docker.Image)
-		pullCmd.Run() // Ignore errors, docker run will fail if image unavailable
+		_ = pullCmd.Run() // Ignore errors, docker run will fail if image unavailable
 	}
 
 	// Image

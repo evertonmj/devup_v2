@@ -5,8 +5,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/spf13/cobra"
 	"devup/internal/config"
+	"devup/internal/log"
+
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -59,9 +61,11 @@ func runClean(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Default to cleaning all if no specific flags are set
-	if !cleanEnv && !cleanLogs && !cleanDirs {
-		cleanAll = true
+	// Default behavior: clean logs and setup directories, but DO NOT remove .env
+	// Users must explicitly pass --env or --all to remove the .env file.
+	if !cleanEnv && !cleanLogs && !cleanDirs && !cleanAll {
+		cleanLogs = true
+		cleanDirs = true
 	}
 
 	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
@@ -78,7 +82,7 @@ func runClean(cmd *cobra.Command, args []string) error {
 		fmt.Print("Are you sure you want to continue? (yes/no): ")
 
 		var response string
-		fmt.Scanln(&response)
+		_, _ = fmt.Scanln(&response)
 		if response != "yes" && response != "y" {
 			fmt.Println("\n❌ Clean cancelled")
 			return nil
@@ -173,7 +177,7 @@ func cleanPath(path string, description string, dryRun bool) (removed int, faile
 		return 0, 1
 	}
 	if err != nil {
-		fmt.Printf("  ❌ %s: %s (error: %v)\n", description, path, err)
+		log.Errorf("%s: %s (error: %v)", description, path, err)
 		return 0, 1
 	}
 
@@ -188,7 +192,7 @@ func cleanPath(path string, description string, dryRun bool) (removed int, faile
 
 	// Remove the path
 	if err := os.RemoveAll(path); err != nil {
-		fmt.Printf("  ❌ Failed to remove %s: %s (%v)\n", description, path, err)
+		log.Errorf("Failed to remove %s: %s (%v)", description, path, err)
 		return 0, 1
 	}
 

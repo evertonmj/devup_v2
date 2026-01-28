@@ -97,7 +97,7 @@ func TestCheckTCP(t *testing.T) {
 	_, err := fmt.Sscanf(addr, "%s:%d", &host, &port)
 	if err != nil {
 		// Try alternative format
-		_, err = fmt.Sscanf(addr, "[%s]:%d", &host, &port)
+		_, _ = fmt.Sscanf(addr, "[%s]:%d", &host, &port)
 	}
 
 	// If we can't parse, just test with the listening port

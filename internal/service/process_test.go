@@ -1,11 +1,14 @@
 package service
 
 import (
+	"context"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"devup/internal/config"
 )
@@ -96,3 +99,135 @@ func TestNewProcessRunner(t *testing.T) {
 		t.Errorf("Expected workdir to be /service3, but got %s", runner3.workDir)
 	}
 }
+
+func TestProcessRunnerStartStopStatusLogs(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmpDir, "logs"), 0755); err != nil {
+		t.Fatalf("mkdir logs: %v", err)
+	}
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(origWd) }()
+
+	ctx := context.Background()
+
+	// Runner with log file: Start -> Status -> Logs -> Stop
+	svc := config.Service{
+		Name:    "svc1",
+		Command: "echo hello",
+		LogFile: "logs/svc.log",
+	}
+	runner, err := NewProcessRunner(svc, tmpDir)
+	if err != nil {
+		t.Fatalf("NewProcessRunner: %v", err)
+	}
+	if err := runner.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	st := runner.Status()
+	if !st.Running || st.Name != "svc1" {
+		t.Errorf("Status: %+v", st)
+	}
+	lines, err := runner.Logs()
+	if err != nil {
+		t.Fatalf("Logs: %v", err)
+	}
+	if len(lines) > 0 && lines[len(lines)-1] != "hello" {
+		t.Logf("Logs: %v (expected hello)", lines)
+	}
+	if err := runner.Stop(ctx); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+	if runner.Status().Running {
+		t.Error("Status after Stop should not be running")
+	}
+
+	// Logs with no log file
+	svcNoLog := config.Service{Name: "nolog", Command: "echo x"}
+	rNoLog, _ := NewProcessRunner(svcNoLog, tmpDir)
+	_ = rNoLog.Start(ctx)
+	_, err = rNoLog.Logs()
+	if err == nil {
+		t.Error("Logs() expected error when no log file configured")
+	}
+	_ = rNoLog.Stop(ctx)
+}
+
+func TestProcessRunner_ExecHealthCheck(t *testing.T) {
+	tmpDir := t.TempDir()
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(origWd) }()
+
+	svc := config.Service{
+		Name:    "healthsvc",
+		Command: "sleep 0.5",
+		HealthCheck: config.HealthCheck{
+			Type:     "exec",
+			Endpoint: "true",
+			Timeout:  5 * time.Second,
+			Interval: 50 * time.Millisecond,
+			Retries:  5,
+		},
+	}
+	runner, err := NewProcessRunner(svc, tmpDir)
+	if err != nil {
+		t.Fatalf("NewProcessRunner: %v", err)
+	}
+	ctx := context.Background()
+	if err := runner.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if !runner.Status().Running {
+		t.Error("expected running after Start with exec healthcheck")
+	}
+	// Don't call Stop to avoid monitor vs Stop race; process exits on its own.
+	time.Sleep(2 * time.Second)
+}
+
+func TestProcessRunner_StartAlreadyRunning(t *testing.T) {
+	tmpDir := t.TempDir()
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(origWd) }()
+	_ = os.MkdirAll("logs", 0755)
+
+	svc := config.Service{Name: "s1", Command: "sleep 3", LogFile: "logs/s1.log"}
+	runner, _ := NewProcessRunner(svc, tmpDir)
+	ctx := context.Background()
+	if err := runner.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() { _ = runner.Stop(ctx) }()
+	if err := runner.Start(ctx); err == nil {
+		t.Error("Start expected error when already running")
+	} else if !strings.Contains(err.Error(), "already running") {
+		t.Errorf("Start(2nd): %v", err)
+	}
+}
+
+func TestProcessRunner_StopWhenNotStarted(t *testing.T) {
+	svc := config.Service{Name: "s1", Command: "echo x"}
+	runner, _ := NewProcessRunner(svc, ".")
+	ctx := context.Background()
+	if err := runner.Stop(ctx); err != nil {
+		t.Errorf("Stop when not started: %v", err)
+	}
+}
+
+

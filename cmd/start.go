@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"devup/internal/config"
+	"devup/internal/log"
 	"devup/internal/service"
 )
 
@@ -73,7 +74,7 @@ func startApplication() error {
 	if len(ports) > 0 {
 		for _, port := range ports {
 			if err := service.CleanPort(port); err != nil {
-				fmt.Printf("   ⚠️  Warning: failed to clean port %d: %v\n", port, err)
+				log.Errorf("failed to clean port %d: %v", port, err)
 			} else {
 				fmt.Printf("   ✓ Cleaned port %d\n", port)
 			}
@@ -180,12 +181,11 @@ func getApp(cfg *config.AppConfig) (*config.AppSpec, error) {
 	}
 
 	// Multiple apps, need to specify
-	fmt.Fprintf(os.Stderr, "Multiple apps found. Please specify with -a flag:\n\n")
+	var list []string
 	for name, app := range cfg.Apps {
-		fmt.Fprintf(os.Stderr, "  • %s - %s\n", name, app.Description)
+		list = append(list, name+" - "+app.Description)
 	}
-	fmt.Fprintln(os.Stderr)
-
+	log.Errorf("Multiple apps found. Specify with -a flag: %v", list)
 	return nil, fmt.Errorf("please specify an app with -a/--app flag")
 }
 

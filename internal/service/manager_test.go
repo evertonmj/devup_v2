@@ -2,7 +2,11 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"os/exec"
+	"strings"
 	"testing"
+	"time"
 
 	"devup/internal/config"
 )
@@ -367,5 +371,251 @@ func TestGetServiceLogs(t *testing.T) {
 	_, err := manager.GetServiceLogs("nonexistent")
 	if err == nil {
 		t.Error("GetServiceLogs() should return error for nonexistent service")
+	}
+}
+
+func TestManagerStartStop(t *testing.T) {
+	tmpDir := t.TempDir()
+	app := &config.AppSpec{
+		Name:    "test-app",
+		WorkDir: tmpDir,
+		Services: []config.Service{
+			{Name: "s1", Command: "sleep 0.5", Type: "process"},
+		},
+		Modes: map[string]config.Mode{
+			"default": {Services: []string{"s1"}},
+		},
+	}
+	manager := NewManager(app, "default")
+	ctx := context.Background()
+
+	if err := manager.Start(ctx); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	st := manager.Status()
+	if len(st) != 1 || !st["s1"].Running {
+		t.Errorf("Status() after Start: got %v", st)
+	}
+	if err := manager.Stop(ctx); err != nil {
+		t.Fatalf("Stop() error = %v", err)
+	}
+	st = manager.Status()
+	if len(st) != 0 {
+		t.Errorf("Status() after Stop: got %v, want empty", st)
+	}
+}
+
+func TestManagerStop_PostStopHookFails(t *testing.T) {
+	app := &config.AppSpec{
+		Name:    "test-app",
+		WorkDir: ".",
+		Services: []config.Service{
+			{Name: "s1", Command: "echo x"},
+		},
+		Modes: map[string]config.Mode{
+			"default": {Services: []string{"s1"}},
+		},
+		Hooks: config.Hooks{PostStop: []string{"exit 1"}},
+	}
+	mgr := NewManager(app, "default")
+	ctx := context.Background()
+	err := mgr.Stop(ctx)
+	if err == nil {
+		t.Fatal("Stop expected error when post-stop hook fails")
+	}
+	if !strings.Contains(err.Error(), "post-stop") {
+		t.Errorf("error = %v", err)
+	}
+}
+
+func TestManagerStop_PreStopHookFails(t *testing.T) {
+	app := &config.AppSpec{
+		Name:    "test-app",
+		WorkDir: ".",
+		Services: []config.Service{
+			{Name: "s1", Command: "echo x"},
+		},
+		Modes: map[string]config.Mode{
+			"default": {Services: []string{"s1"}},
+		},
+		Hooks: config.Hooks{PreStop: []string{"exit 1"}},
+	}
+	mgr := NewManager(app, "default")
+	ctx := context.Background()
+	err := mgr.Stop(ctx)
+	if err == nil {
+		t.Fatal("Stop expected error when pre-stop hook fails")
+	}
+	if !strings.Contains(err.Error(), "pre-stop") {
+		t.Errorf("error = %v", err)
+	}
+}
+
+func TestExecuteHooksFailure(t *testing.T) {
+	app := &config.AppSpec{
+		Name:    "test-app",
+		WorkDir: ".",
+		Hooks:   config.Hooks{PreStart: []string{"exit 1"}},
+	}
+	manager := NewManager(app, "default")
+	err := manager.executeHooks(app.Hooks.PreStart)
+	if err == nil {
+		t.Error("executeHooks() expected error for failing hook")
+	}
+}
+
+func TestManagerStart_PostStartHookFails(t *testing.T) {
+	app := &config.AppSpec{
+		Name:    "test-app",
+		WorkDir: ".",
+		Services: []config.Service{
+			{Name: "s1", Command: "sleep 2"},
+		},
+		Modes: map[string]config.Mode{
+			"default": {Services: []string{"s1"}},
+		},
+		Hooks: config.Hooks{PostStart: []string{"exit 1"}},
+	}
+	mgr := NewManager(app, "default")
+	ctx := context.Background()
+	err := mgr.Start(ctx)
+	if err == nil {
+		t.Fatal("Start expected error when post-start hook fails")
+	}
+	if !strings.Contains(err.Error(), "post-start") {
+		t.Errorf("error = %v", err)
+	}
+}
+
+func TestManagerStart_PreStartHookFails(t *testing.T) {
+	app := &config.AppSpec{
+		Name:    "test-app",
+		WorkDir: ".",
+		Services: []config.Service{
+			{Name: "s1", Command: "echo x"},
+		},
+		Modes: map[string]config.Mode{
+			"default": {Services: []string{"s1"}},
+		},
+		Hooks: config.Hooks{PreStart: []string{"exit 1"}},
+	}
+	mgr := NewManager(app, "default")
+	ctx := context.Background()
+	err := mgr.Start(ctx)
+	if err == nil {
+		t.Fatal("Start expected error when pre-start hook fails")
+	}
+	if !strings.Contains(err.Error(), "pre-start") {
+		t.Errorf("error = %v", err)
+	}
+}
+
+func TestManagerStart_UnknownServiceType(t *testing.T) {
+	app := &config.AppSpec{
+		Name:    "test-app",
+		WorkDir: ".",
+		Services: []config.Service{
+			{Name: "s1", Type: "invalid", Command: "echo x"},
+		},
+		Modes: map[string]config.Mode{
+			"default": {Services: []string{"s1"}},
+		},
+	}
+	mgr := NewManager(app, "default")
+	ctx := context.Background()
+	err := mgr.Start(ctx)
+	if err == nil {
+		t.Fatal("Start expected error for unknown service type")
+	}
+	if !strings.Contains(err.Error(), "unknown service type") {
+		t.Errorf("error = %v", err)
+	}
+}
+
+func TestManagerStart_DockerRequiresConfig(t *testing.T) {
+	app := &config.AppSpec{
+		Name:    "test-app",
+		WorkDir: ".",
+		Services: []config.Service{
+			{Name: "s1", Type: "docker", Command: "echo x"},
+		},
+		Modes: map[string]config.Mode{
+			"default": {Services: []string{"s1"}},
+		},
+	}
+	mgr := NewManager(app, "default")
+	ctx := context.Background()
+	err := mgr.Start(ctx)
+	if err == nil {
+		t.Fatal("Start expected error when docker service has no docker config")
+	}
+	if !strings.Contains(err.Error(), "requires docker configuration") {
+		t.Errorf("error = %v", err)
+	}
+}
+
+func TestManagerStart_TmuxNotImplemented(t *testing.T) {
+	app := &config.AppSpec{
+		Name:    "test-app",
+		WorkDir: ".",
+		Services: []config.Service{
+			{Name: "s1", Type: "tmux", Command: "echo x"},
+		},
+		Modes: map[string]config.Mode{
+			"default": {Services: []string{"s1"}},
+		},
+	}
+	mgr := NewManager(app, "default")
+	ctx := context.Background()
+	err := mgr.Start(ctx)
+	if err == nil {
+		t.Fatal("Start expected error for tmux")
+	}
+	if !strings.Contains(err.Error(), "tmux") {
+		t.Errorf("error = %v", err)
+	}
+}
+
+func TestManagerStartStop_DockerWhenAvailable(t *testing.T) {
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker not in PATH")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	check := exec.CommandContext(ctx, "docker", "info")
+	if err := check.Run(); err != nil {
+		t.Skip("docker daemon not running")
+	}
+
+	tmpDir := t.TempDir()
+	containerName := fmt.Sprintf("devup-mgr-test-%d", time.Now().UnixNano()%1000000)
+	app := &config.AppSpec{
+		Name:    "test-app",
+		WorkDir: tmpDir,
+		Services: []config.Service{
+			{
+				Name: "dc",
+				Type: "docker",
+				Port: 9998,
+				Docker: &config.DockerConfig{
+					Image:     "alpine:3.18",
+					Container: containerName,
+					Remove:    true,
+					Cmd:       "sleep 2",
+				},
+			},
+		},
+		Modes: map[string]config.Mode{
+			"default": {Services: []string{"dc"}},
+		},
+	}
+	defer func() { _ = exec.CommandContext(context.Background(), "docker", "rm", "-f", containerName).Run() }()
+
+	mgr := NewManager(app, "default")
+	if err := mgr.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if err := mgr.Stop(ctx); err != nil {
+		t.Fatalf("Stop: %v", err)
 	}
 }

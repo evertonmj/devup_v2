@@ -40,7 +40,7 @@ func TestCheckTCPHealth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to listen on a port: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	port := listener.Addr().(*net.TCPAddr).Port
 	if !checkTCPHealth(port) {

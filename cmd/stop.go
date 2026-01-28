@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"devup/internal/config"
+	"devup/internal/log"
 	"devup/internal/service"
 )
 
@@ -62,7 +63,7 @@ func stopApplication() error {
 	if len(ports) > 0 {
 		for _, port := range ports {
 			if err := service.CleanPort(port); err != nil {
-				fmt.Printf("   ⚠️  Warning: failed to clean port %d: %v\n", port, err)
+				log.Errorf("failed to clean port %d: %v", port, err)
 			} else {
 				fmt.Printf("   ✓ Cleaned port %d\n", port)
 			}

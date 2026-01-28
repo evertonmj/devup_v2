@@ -87,17 +87,54 @@ func (tr *TemplateResolver) ResolveService(svc *Service) *Service {
 	if svc == nil {
 		return nil
 	}
+	// Normalize service workdir: prefer relative to app WORKDIR when possible
+	resolvedWorkDir := tr.ResolveString(svc.WorkDir)
+	normalizedWorkDir := resolvedWorkDir
+	if resolvedWorkDir != "" {
+		appWD := tr.context["WORKDIR"]
+		// If service workdir is absolute and inside app workdir, convert to relative
+		if filepath.IsAbs(resolvedWorkDir) && appWD != "" {
+			// Ensure both paths are using the same separator conventions
+			// Attempt to compute relative path
+			if rel, err := filepath.Rel(appWD, resolvedWorkDir); err == nil && !strings.HasPrefix(rel, "..") {
+				normalizedWorkDir = rel
+			}
+		}
+	}
+
+	// Resolve Docker configuration if present
+	var resolvedDocker *DockerConfig
+	if svc.Docker != nil {
+		resolvedDocker = &DockerConfig{
+			Image:         tr.ResolveString(svc.Docker.Image),
+			Container:     tr.ResolveString(svc.Docker.Container),
+			Ports:         tr.ResolveStringSlice(svc.Docker.Ports),
+			Volumes:       tr.ResolveStringSlice(svc.Docker.Volumes),
+			Environment:   tr.ResolveStringMap(svc.Docker.Environment),
+			Networks:      tr.ResolveStringSlice(svc.Docker.Networks),
+			Pull:          svc.Docker.Pull,
+			Remove:        svc.Docker.Remove,
+			RestartPolicy: tr.ResolveString(svc.Docker.RestartPolicy),
+			Entrypoint:    tr.ResolveString(svc.Docker.Entrypoint),
+			Cmd:           tr.ResolveString(svc.Docker.Cmd),
+			WorkDir:       tr.ResolveString(svc.Docker.WorkDir),
+			User:          tr.ResolveString(svc.Docker.User),
+			Privileged:    svc.Docker.Privileged,
+			Labels:        svc.Docker.Labels, // labels are key/value; leave as-is
+		}
+	}
 
 	return &Service{
 		Name:         svc.Name,
 		Type:         svc.Type,
 		Command:      tr.ResolveString(svc.Command),
-		WorkDir:      tr.ResolveString(svc.WorkDir),
+		WorkDir:      normalizedWorkDir,
 		Port:         svc.Port,
 		Environment:  tr.ResolveStringMap(svc.Environment),
 		HealthCheck:  svc.HealthCheck, // HealthCheck doesn't have string fields that need resolution
 		LogFile:      tr.ResolveString(svc.LogFile),
 		Dependencies: svc.Dependencies,
+		Docker:       resolvedDocker,
 	}
 }
 
