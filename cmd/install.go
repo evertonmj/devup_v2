@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"devup/internal/config"
 	"devup/internal/log"
 )
@@ -256,7 +256,11 @@ func runInstallSteps(app *config.AppSpec, isDryRun bool) error {
 
 		workDir := app.WorkDir
 		if step.WorkDir != "" {
-			workDir = step.WorkDir
+			if filepath.IsAbs(step.WorkDir) {
+				workDir = step.WorkDir
+			} else {
+				workDir = filepath.Join(app.WorkDir, step.WorkDir)
+			}
 		}
 
 		for _, cmdStr := range step.Commands {

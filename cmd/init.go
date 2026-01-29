@@ -215,12 +215,15 @@ type ProjectInfo struct {
 	Name        string
 	Description string
 	Type        string // web, api, cli, library, etc.
+	RootDir     string
 	Services    []ServiceInfo
 	Environment map[string]string
 	PackageMgr  string // npm, go, pip, cargo, etc.
 	BuildCmd    string
 	TestCmd     string
 	DevCmd      string
+	InstallCmds []CommandInfo
+	SetupCmds   []CommandInfo
 }
 
 // ServiceInfo holds information about a detected service
@@ -241,27 +244,43 @@ type ServiceInfo struct {
 	Language string
 }
 
+// CommandInfo holds a command and its working directory
+type CommandInfo struct {
+	Command string
+	WorkDir string
+}
+
 func scanProject(dir string) (*ProjectInfo, error) {
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		absDir = dir
+	}
+
 	info := &ProjectInfo{
-		Name:        filepath.Base(getCurrentDir()),
+		Name:        filepath.Base(absDir),
+		RootDir:     absDir,
 		Services:    []ServiceInfo{},
 		Environment: make(map[string]string),
 	}
 
 	// Detect package manager and project type
-	detectPackageManager(dir, info)
+	detectPackageManager(absDir, info)
 
 	// Read and analyze documentation
-	analyzeDocumentation(dir, info)
+	analyzeDocumentation(absDir, info)
 
 	// Scan .env style files
 	scanEnvFiles(dir, info)
 
 	// Detect common project structures
-	detectProjectStructure(dir, info)
+	if len(info.Services) == 0 {
+		detectProjectStructure(absDir, info)
+	}
 
 	// Detect ports and services
-	detectServices(dir, info)
+	if len(info.Services) == 0 {
+		detectServices(absDir, info)
+	}
 
 	// Infer related backing services like databases
 	detectDatabaseServices(dir, info)
@@ -309,6 +328,8 @@ func analyzeDocumentation(dir string, info *ProjectInfo) {
 	}
 
 	if readmeContent != "" {
+		extractReadmeInstructions(dir, readmeContent, info)
+
 		// Extract title/description
 		lines := strings.Split(readmeContent, "\n")
 		for _, line := range lines {
@@ -417,7 +438,7 @@ func detectProjectStructure(dir string, info *ProjectInfo) {
 			Type:      "process",
 			Command:   info.DevCmd,
 			Port:      3000,
-			Directory: ".",
+			Directory: dir,
 		}
 		info.Services = append(info.Services, defaultService)
 	}
@@ -756,10 +777,39 @@ func parseDotEnvContent(content string, info *ProjectInfo) {
 
 func extractCommands(line string, info *ProjectInfo) {
 	// Update commands if found in documentation
-	if strings.Contains(line, "npm run dev") && info.DevCmd == "" {
+	if info.DevCmd != "" {
+		return
+	}
+
+	switch {
+	case strings.Contains(line, "npm run dev"):
 		info.DevCmd = "npm run dev"
-	} else if strings.Contains(line, "npm start") && info.DevCmd == "" {
+	case strings.Contains(line, "npm start"):
 		info.DevCmd = "npm start"
+	case strings.Contains(line, "yarn dev"):
+		info.DevCmd = "yarn dev"
+	case strings.Contains(line, "yarn start"):
+		info.DevCmd = "yarn start"
+	case strings.Contains(line, "pnpm dev"):
+		info.DevCmd = "pnpm dev"
+	case strings.Contains(line, "pnpm start"):
+		info.DevCmd = "pnpm start"
+	case strings.Contains(line, "go run"):
+		info.DevCmd = "go run ."
+	case strings.Contains(line, "docker compose up"):
+		info.DevCmd = "docker compose up"
+	case strings.Contains(line, "docker-compose up"):
+		info.DevCmd = "docker-compose up"
+	case strings.Contains(line, "make dev"):
+		info.DevCmd = "make dev"
+	case strings.Contains(line, "make start"):
+		info.DevCmd = "make start"
+	case strings.Contains(line, "uvicorn "):
+		info.DevCmd = "uvicorn app:app --reload"
+	case strings.Contains(line, "flask run"):
+		info.DevCmd = "flask run"
+	case strings.Contains(line, "rails s"):
+		info.DevCmd = "rails s"
 	}
 }
 
@@ -799,6 +849,11 @@ func promptProjectInfo(info *ProjectInfo) error {
 
 func generateConfig(info *ProjectInfo) string {
 	var sb strings.Builder
+
+	appWorkDir := info.RootDir
+	if appWorkDir == "" {
+		appWorkDir = getCurrentDir()
+	}
 
 	sb.WriteString("version: \"1.0\"\n\n")
 	sb.WriteString("apps:\n")
@@ -1071,6 +1126,8 @@ func generateConfig(info *ProjectInfo) string {
 	sb.WriteString("      post_start:\n")
 	sb.WriteString("        - \"echo 'Application started successfully'\"\n")
 
+	appendInstallSetup(&sb, info, appWorkDir)
+
 	return sb.String()
 }
 
@@ -1093,4 +1150,343 @@ func getCurrentDir() string {
 func readLine(reader *bufio.Reader) string {
 	input, _ := reader.ReadString('\n')
 	return strings.TrimSpace(input)
+}
+
+func extractReadmeInstructions(projectRoot, content string, info *ProjectInfo) {
+	lines := strings.Split(content, "\n")
+	inCodeBlock := false
+	section := ""
+	currentWorkDir := ""
+	usedNames := make(map[string]int)
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		if strings.HasPrefix(trimmed, "```") {
+			inCodeBlock = !inCodeBlock
+			currentWorkDir = ""
+			continue
+		}
+
+		if strings.HasPrefix(trimmed, "#") {
+			section = strings.TrimSpace(strings.TrimLeft(trimmed, "#"))
+			continue
+		}
+
+		if !inCodeBlock || trimmed == "" {
+			continue
+		}
+
+		cmd := strings.TrimSpace(trimmed)
+		if strings.HasPrefix(cmd, "$") || strings.HasPrefix(cmd, ">") {
+			cmd = strings.TrimSpace(cmd[1:])
+		}
+		if cmd == "" || strings.HasPrefix(cmd, "#") {
+			continue
+		}
+
+		if dir, rest, ok := splitChainedCD(cmd); ok {
+			currentWorkDir = resolveWorkDir(projectRoot, currentWorkDir, dir)
+			cmd = rest
+			if cmd == "" {
+				continue
+			}
+		}
+
+		if strings.HasPrefix(cmd, "cd ") {
+			currentWorkDir = resolveWorkDir(projectRoot, currentWorkDir, strings.TrimSpace(strings.TrimPrefix(cmd, "cd ")))
+			continue
+		}
+
+		workDir := projectRoot
+		if currentWorkDir != "" {
+			workDir = currentWorkDir
+		}
+
+		switch {
+		case isInstallCommand(cmd):
+			addCommand(&info.InstallCmds, cmd, workDir)
+		case isSetupCommand(cmd):
+			addCommand(&info.SetupCmds, cmd, workDir)
+		case isRunCommand(cmd):
+			name := inferServiceName(section, cmd)
+			name = ensureUniqueServiceName(name, usedNames, info.Services)
+			info.Services = append(info.Services, ServiceInfo{
+				Name:      name,
+				Type:      "process",
+				Command:   cmd,
+				Directory: workDir,
+			})
+		}
+	}
+}
+
+func splitChainedCD(cmd string) (string, string, bool) {
+	for _, sep := range []string{"&&", ";"} {
+		parts := strings.SplitN(cmd, sep, 2)
+		if len(parts) == 2 {
+			left := strings.TrimSpace(parts[0])
+			if strings.HasPrefix(left, "cd ") {
+				dir := strings.TrimSpace(strings.TrimPrefix(left, "cd "))
+				rest := strings.TrimSpace(parts[1])
+				return dir, rest, true
+			}
+		}
+	}
+	return "", "", false
+}
+
+func resolveWorkDir(projectRoot, current, dir string) string {
+	if dir == "" {
+		return current
+	}
+	if filepath.IsAbs(dir) {
+		return filepath.Clean(dir)
+	}
+	base := projectRoot
+	if current != "" {
+		base = current
+	}
+	return filepath.Clean(filepath.Join(base, dir))
+}
+
+func addCommand(commands *[]CommandInfo, cmd, workDir string) {
+	for _, existing := range *commands {
+		if existing.Command == cmd && existing.WorkDir == workDir {
+			return
+		}
+	}
+	*commands = append(*commands, CommandInfo{
+		Command: cmd,
+		WorkDir: workDir,
+	})
+}
+
+func isInstallCommand(cmd string) bool {
+	lower := strings.ToLower(cmd)
+	return strings.Contains(lower, "npm install") ||
+		strings.Contains(lower, "npm ci") ||
+		strings.Contains(lower, "yarn install") ||
+		strings.Contains(lower, "pnpm install") ||
+		strings.Contains(lower, "pip install") ||
+		strings.Contains(lower, "pip3 install") ||
+		strings.Contains(lower, "poetry install") ||
+		strings.Contains(lower, "bundle install") ||
+		strings.Contains(lower, "composer install") ||
+		strings.Contains(lower, "go mod download") ||
+		strings.Contains(lower, "go mod tidy")
+}
+
+func isSetupCommand(cmd string) bool {
+	lower := strings.ToLower(cmd)
+	return strings.HasPrefix(lower, "python -m venv") ||
+		strings.HasPrefix(lower, "python3 -m venv") ||
+		strings.HasPrefix(lower, "virtualenv ") ||
+		strings.HasPrefix(lower, "uv venv") ||
+		strings.Contains(lower, "cp .env") ||
+		strings.Contains(lower, "copy .env") ||
+		strings.Contains(lower, "cp env") ||
+		strings.Contains(lower, "cp config") ||
+		strings.Contains(lower, "source ") ||
+		strings.Contains(lower, "export ")
+}
+
+func isRunCommand(cmd string) bool {
+	lower := strings.ToLower(cmd)
+	return strings.Contains(lower, "npm run dev") ||
+		strings.Contains(lower, "npm start") ||
+		strings.Contains(lower, "yarn dev") ||
+		strings.Contains(lower, "yarn start") ||
+		strings.Contains(lower, "pnpm dev") ||
+		strings.Contains(lower, "pnpm start") ||
+		strings.Contains(lower, "go run") ||
+		strings.Contains(lower, "air ") ||
+		strings.Contains(lower, "uvicorn ") ||
+		strings.Contains(lower, "flask run") ||
+		strings.Contains(lower, "rails s") ||
+		strings.Contains(lower, "bundle exec") ||
+		strings.Contains(lower, "docker compose up") ||
+		strings.Contains(lower, "docker-compose up") ||
+		strings.Contains(lower, "make dev") ||
+		strings.Contains(lower, "make start")
+}
+
+func inferServiceName(section, cmd string) string {
+	if section != "" {
+		return sanitizeServiceName(section)
+	}
+
+	lower := strings.ToLower(cmd)
+	switch {
+	case strings.Contains(lower, "frontend") || strings.Contains(lower, "client"):
+		return "frontend"
+	case strings.Contains(lower, "backend") || strings.Contains(lower, "api"):
+		return "backend"
+	case strings.Contains(lower, "server"):
+		return "server"
+	default:
+		return "app"
+	}
+}
+
+func sanitizeServiceName(name string) string {
+	name = strings.ToLower(name)
+	var b strings.Builder
+	lastDash := false
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			lastDash = false
+			continue
+		}
+		if !lastDash {
+			b.WriteRune('-')
+			lastDash = true
+		}
+	}
+	result := strings.Trim(b.String(), "-")
+	if result == "" {
+		return "app"
+	}
+	return result
+}
+
+func ensureUniqueServiceName(name string, used map[string]int, existing []ServiceInfo) string {
+	if name == "" {
+		name = "app"
+	}
+	if used[name] == 0 {
+		for _, svc := range existing {
+			if svc.Name == name {
+				used[name] = 1
+				break
+			}
+		}
+	}
+	if used[name] == 0 {
+		used[name] = 1
+		return name
+	}
+	used[name]++
+	return fmt.Sprintf("%s-%d", name, used[name])
+}
+
+func resolveAbsolutePath(baseDir, path string) string {
+	if path == "" {
+		return ""
+	}
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path)
+	}
+	return filepath.Clean(filepath.Join(baseDir, path))
+}
+
+func appendInstallSetup(sb *strings.Builder, info *ProjectInfo, appWorkDir string) {
+	installSteps := groupCommandsByWorkdir(info.InstallCmds, appWorkDir)
+	if len(installSteps) == 0 {
+		switch info.PackageMgr {
+		case "npm":
+			installSteps = append(installSteps, InstallStepSpec{
+				Name:     "Install dependencies",
+				WorkDir:  appWorkDir,
+				Commands: []string{"npm install"},
+			})
+		case "go":
+			installSteps = append(installSteps, InstallStepSpec{
+				Name:     "Install dependencies",
+				WorkDir:  appWorkDir,
+				Commands: []string{"go mod download"},
+			})
+		case "pip":
+			installSteps = append(installSteps, InstallStepSpec{
+				Name:     "Install dependencies",
+				WorkDir:  appWorkDir,
+				Commands: []string{"pip install -r requirements.txt"},
+			})
+		}
+	}
+
+	if len(installSteps) > 0 {
+		sb.WriteString("\n    install:\n")
+		sb.WriteString("      steps:\n")
+		for _, step := range installSteps {
+			sb.WriteString(fmt.Sprintf("        - name: \"%s\"\n", step.Name))
+			if step.WorkDir != "" && step.WorkDir != appWorkDir {
+				sb.WriteString(fmt.Sprintf("          workdir: \"%s\"\n", step.WorkDir))
+			}
+			sb.WriteString("          commands:\n")
+			for _, cmd := range step.Commands {
+				sb.WriteString(fmt.Sprintf("            - \"%s\"\n", cmd))
+			}
+		}
+	}
+
+	setupScripts := formatSetupScripts(info.SetupCmds, appWorkDir)
+	if len(setupScripts) == 0 && info.PackageMgr == "pip" {
+		setupScripts = append(setupScripts, "python -m venv .venv")
+	}
+	if len(setupScripts) > 0 {
+		sb.WriteString("\n    setup:\n")
+		sb.WriteString("      scripts:\n")
+		for _, script := range setupScripts {
+			sb.WriteString(fmt.Sprintf("        - \"%s\"\n", script))
+		}
+	}
+}
+
+type InstallStepSpec struct {
+	Name     string
+	WorkDir  string
+	Commands []string
+}
+
+func groupCommandsByWorkdir(commands []CommandInfo, appWorkDir string) []InstallStepSpec {
+	if len(commands) == 0 {
+		return nil
+	}
+
+	order := []string{}
+	buckets := make(map[string][]string)
+	for _, cmd := range commands {
+		workDir := cmd.WorkDir
+		if workDir == "" {
+			workDir = appWorkDir
+		}
+		if _, exists := buckets[workDir]; !exists {
+			order = append(order, workDir)
+		}
+		buckets[workDir] = append(buckets[workDir], cmd.Command)
+	}
+
+	steps := make([]InstallStepSpec, 0, len(order))
+	for _, workDir := range order {
+		name := "Install dependencies"
+		if workDir != appWorkDir {
+			name = fmt.Sprintf("Install dependencies (%s)", filepath.Base(workDir))
+		}
+		steps = append(steps, InstallStepSpec{
+			Name:     name,
+			WorkDir:  workDir,
+			Commands: buckets[workDir],
+		})
+	}
+
+	return steps
+}
+
+func formatSetupScripts(commands []CommandInfo, appWorkDir string) []string {
+	if len(commands) == 0 {
+		return nil
+	}
+
+	scripts := []string{}
+	for _, cmd := range commands {
+		workDir := cmd.WorkDir
+		if workDir == "" || workDir == appWorkDir {
+			scripts = append(scripts, cmd.Command)
+			continue
+		}
+		scripts = append(scripts, fmt.Sprintf("cd %s && %s", workDir, cmd.Command))
+	}
+	return scripts
 }
