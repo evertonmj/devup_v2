@@ -297,10 +297,11 @@ func TestGenerateConfig(t *testing.T) {
 		{
 			name: "Python app with venv app scope",
 			info: &ProjectInfo{
-				Name:         "myapi",
-				Description:  "Python API",
-				PackageMgr:   "pip",
-				VenvAppScope: true,
+				Name:          "myapi",
+				Description:   "Python API",
+				PackageMgr:    "pip",
+				VenvAppScope:  true,
+				PythonVersion: "python3.11",
 				Services: []ServiceInfo{
 					{Name: "api", Type: "api", Command: "uvicorn main:app", Language: "python", Directory: "backend", Port: 8000},
 					{Name: "frontend", Type: "web", Command: "npm run dev", Port: 3000},
@@ -309,8 +310,27 @@ func TestGenerateConfig(t *testing.T) {
 			contains: []string{
 				"python:",
 				"venv:",
+				"version: \"python3.11\"",
 				"dir: \".venv\"",
 				"app_scope: true",
+			},
+		},
+		{
+			name: "App with runtimes (node)",
+			info: &ProjectInfo{
+				Name:        "fullstack",
+				Description: "Fullstack",
+				PackageMgr:  "npm",
+				RuntimeVersions: map[string]string{
+					"node": "20",
+				},
+				Services: []ServiceInfo{
+					{Name: "frontend", Type: "web", Command: "npm run dev", Language: "node", Port: 3000},
+				},
+			},
+			contains: []string{
+				"runtimes:",
+				"node: \"20\"",
 			},
 		},
 	}

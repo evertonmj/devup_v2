@@ -212,16 +212,18 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 // ProjectInfo holds detected project information
 type ProjectInfo struct {
-	Name         string
-	Description  string
-	Type         string // web, api, cli, library, etc.
-	Services     []ServiceInfo
-	Environment  map[string]string
-	PackageMgr   string // npm, go, pip, cargo, etc.
-	BuildCmd     string
-	TestCmd      string
-	DevCmd       string
-	VenvAppScope bool // when true, activate Python venv for entire app (all services including frontend)
+	Name            string
+	Description     string
+	Type            string // web, api, cli, library, etc.
+	Services        []ServiceInfo
+	Environment     map[string]string
+	PackageMgr      string // npm, go, pip, cargo, etc.
+	BuildCmd        string
+	TestCmd         string
+	DevCmd          string
+	VenvAppScope    bool              // when true, activate Python venv for entire app (all services including frontend)
+	PythonVersion   string            // Python executable for venv (e.g. "python3", "python3.11")
+	RuntimeVersions map[string]string // framework versions: node, go, etc.
 }
 
 // ServiceInfo holds information about a detected service
@@ -774,6 +776,18 @@ func hasPythonServices(info *ProjectInfo) bool {
 	return false
 }
 
+func hasNodeServices(info *ProjectInfo) bool {
+	if info.PackageMgr == "npm" {
+		return true
+	}
+	for _, s := range info.Services {
+		if strings.EqualFold(s.Language, "node") {
+			return true
+		}
+	}
+	return false
+}
+
 func pythonServiceDirs(info *ProjectInfo) []string {
 	dirs := []string{}
 	if info.PackageMgr == "pip" || info.PackageMgr == "pipenv" {
@@ -943,6 +957,25 @@ func promptProjectInfo(info *ProjectInfo) error {
 		fmt.Print("\nActivate Python venv for entire app scope (all services including frontend)? [y/N]: ")
 		if input := readLine(reader); strings.ToLower(strings.TrimSpace(input)) == "y" || strings.ToLower(strings.TrimSpace(input)) == "yes" {
 			info.VenvAppScope = true
+			fmt.Print("Python version for venv [python3]: ")
+			if v := strings.TrimSpace(readLine(reader)); v != "" {
+				info.PythonVersion = v
+			} else {
+				info.PythonVersion = "python3"
+			}
+		}
+	}
+
+	// Framework/runtime versions: when Node detected, offer to set Node version
+	if hasNodeServices(info) {
+		if info.RuntimeVersions == nil {
+			info.RuntimeVersions = make(map[string]string)
+		}
+		fmt.Print("\nNode.js version (e.g. 18, 20) [18]: ")
+		if v := strings.TrimSpace(readLine(reader)); v != "" {
+			info.RuntimeVersions["node"] = v
+		} else {
+			info.RuntimeVersions["node"] = "18"
 		}
 	}
 
@@ -962,10 +995,34 @@ func generateConfig(info *ProjectInfo) string {
 
 	// Python venv (app scope) when user opted in
 	if info.VenvAppScope && hasPythonServices(info) {
+		pyVer := info.PythonVersion
+		if pyVer == "" {
+			pyVer = "python3"
+		}
 		sb.WriteString("    python:\n")
 		sb.WriteString("      venv:\n")
+		sb.WriteString(fmt.Sprintf("        version: \"%s\"\n", pyVer))
 		sb.WriteString("        dir: \".venv\"\n")
 		sb.WriteString("        app_scope: true\n\n")
+	}
+
+	// Runtimes: framework versions (node, go, etc.)
+	if len(info.RuntimeVersions) > 0 {
+		sb.WriteString("    runtimes:\n")
+		order := []string{"node", "go", "python"}
+		seen := make(map[string]bool)
+		for _, k := range order {
+			if v, ok := info.RuntimeVersions[k]; ok {
+				sb.WriteString(fmt.Sprintf("      %s: \"%s\"\n", k, v))
+				seen[k] = true
+			}
+		}
+		for k, v := range info.RuntimeVersions {
+			if !seen[k] {
+				sb.WriteString(fmt.Sprintf("      %s: \"%s\"\n", k, v))
+			}
+		}
+		sb.WriteString("\n")
 	}
 
 	// Services
@@ -1075,11 +1132,15 @@ func generateConfig(info *ProjectInfo) string {
 
 		// Python venv setup scripts
 		pyDirs := pythonServiceDirs(info)
+		pyVer := info.PythonVersion
+		if pyVer == "" {
+			pyVer = "python3"
+		}
 		if len(pyDirs) > 0 {
 			sb.WriteString("      scripts:\n")
 			if info.VenvAppScope {
 				// Single app-level venv: create .venv at root, install all Python deps
-				sb.WriteString("        - \"python3 -m venv .venv || true\"\n")
+				sb.WriteString(fmt.Sprintf("        - \"%s -m venv .venv || true\"\n", pyVer))
 				for _, d := range pyDirs {
 					if d == "" {
 						d = "."
@@ -1091,7 +1152,7 @@ func generateConfig(info *ProjectInfo) string {
 					if d == "" {
 						d = "."
 					}
-					sb.WriteString("        - \"cd " + d + " && python3 -m venv .venv || true\"\n")
+					sb.WriteString(fmt.Sprintf("        - \"cd %s && %s -m venv .venv || true\"\n", d, pyVer))
 					sb.WriteString("        - \"cd " + d + " && if [ -f requirements.txt ]; then . .venv/bin/activate && pip install -r requirements.txt; fi\"\n")
 				}
 			}
@@ -1118,9 +1179,13 @@ func generateConfig(info *ProjectInfo) string {
 
 	// When app-scope venv, create .venv first so Python install steps can use it
 	if info.VenvAppScope && hasPythonServices(info) {
+		pyVer := info.PythonVersion
+		if pyVer == "" {
+			pyVer = "python3"
+		}
 		sb.WriteString("        - name: \"Create app Python venv\"\n")
 		sb.WriteString("          commands:\n")
-		sb.WriteString("            - \"python3 -m venv .venv || true\"\n")
+		sb.WriteString(fmt.Sprintf("            - \"%s -m venv .venv || true\"\n", pyVer))
 	}
 
 	// Root-level package manager steps using commands arrays
