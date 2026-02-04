@@ -64,7 +64,7 @@ func TestNewProcessRunner(t *testing.T) {
 	svc1 := config.Service{
 		Name: "service1",
 	}
-	runner1, err := NewProcessRunner(svc1, appWorkDir)
+	runner1, err := NewProcessRunner(svc1, appWorkDir, nil)
 	if err != nil {
 		t.Fatalf("Failed to create process runner: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestNewProcessRunner(t *testing.T) {
 		Name:    "service2",
 		WorkDir: "service2",
 	}
-	runner2, err := NewProcessRunner(svc2, appWorkDir)
+	runner2, err := NewProcessRunner(svc2, appWorkDir, nil)
 	if err != nil {
 		t.Fatalf("Failed to create process runner: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestNewProcessRunner(t *testing.T) {
 		Name:    "service3",
 		WorkDir: "/service3",
 	}
-	runner3, err := NewProcessRunner(svc3, appWorkDir)
+	runner3, err := NewProcessRunner(svc3, appWorkDir, nil)
 	if err != nil {
 		t.Fatalf("Failed to create process runner: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestProcessRunnerStartStopStatusLogs(t *testing.T) {
 		Command: "echo hello",
 		LogFile: "logs/svc.log",
 	}
-	runner, err := NewProcessRunner(svc, tmpDir)
+	runner, err := NewProcessRunner(svc, tmpDir, nil)
 	if err != nil {
 		t.Fatalf("NewProcessRunner: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestProcessRunnerStartStopStatusLogs(t *testing.T) {
 
 	// Logs with no log file
 	svcNoLog := config.Service{Name: "nolog", Command: "echo x"}
-	rNoLog, _ := NewProcessRunner(svcNoLog, tmpDir)
+	rNoLog, _ := NewProcessRunner(svcNoLog, tmpDir, nil)
 	_ = rNoLog.Start(ctx)
 	_, err = rNoLog.Logs()
 	if err == nil {
@@ -180,7 +180,7 @@ func TestProcessRunner_ExecHealthCheck(t *testing.T) {
 			Retries:  5,
 		},
 	}
-	runner, err := NewProcessRunner(svc, tmpDir)
+	runner, err := NewProcessRunner(svc, tmpDir, nil)
 	if err != nil {
 		t.Fatalf("NewProcessRunner: %v", err)
 	}
@@ -208,7 +208,7 @@ func TestProcessRunner_StartAlreadyRunning(t *testing.T) {
 	_ = os.MkdirAll("logs", 0755)
 
 	svc := config.Service{Name: "s1", Command: "sleep 3", LogFile: "logs/s1.log"}
-	runner, _ := NewProcessRunner(svc, tmpDir)
+	runner, _ := NewProcessRunner(svc, tmpDir, nil)
 	ctx := context.Background()
 	if err := runner.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -223,7 +223,7 @@ func TestProcessRunner_StartAlreadyRunning(t *testing.T) {
 
 func TestProcessRunner_StopWhenNotStarted(t *testing.T) {
 	svc := config.Service{Name: "s1", Command: "echo x"}
-	runner, _ := NewProcessRunner(svc, ".")
+	runner, _ := NewProcessRunner(svc, ".", nil)
 	ctx := context.Background()
 	if err := runner.Stop(ctx); err != nil {
 		t.Errorf("Stop when not started: %v", err)

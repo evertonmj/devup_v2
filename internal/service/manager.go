@@ -190,7 +190,7 @@ func (m *Manager) startService(ctx context.Context, serviceName string, modeConf
 
 	switch resolvedService.Type {
 	case "process", "":
-		runner, err = NewProcessRunner(*resolvedService, m.app.WorkDir)
+		runner, err = NewProcessRunner(*resolvedService, m.app.WorkDir, m.app.Python)
 	case "docker":
 		if resolvedService.Docker == nil {
 			return fmt.Errorf("docker service '%s' requires docker configuration", serviceName)

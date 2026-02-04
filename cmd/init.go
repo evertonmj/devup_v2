@@ -212,15 +212,16 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 // ProjectInfo holds detected project information
 type ProjectInfo struct {
-	Name        string
-	Description string
-	Type        string // web, api, cli, library, etc.
-	Services    []ServiceInfo
-	Environment map[string]string
-	PackageMgr  string // npm, go, pip, cargo, etc.
-	BuildCmd    string
-	TestCmd     string
-	DevCmd      string
+	Name         string
+	Description  string
+	Type         string // web, api, cli, library, etc.
+	Services     []ServiceInfo
+	Environment  map[string]string
+	PackageMgr   string // npm, go, pip, cargo, etc.
+	BuildCmd     string
+	TestCmd      string
+	DevCmd       string
+	VenvAppScope bool // when true, activate Python venv for entire app (all services including frontend)
 }
 
 // ServiceInfo holds information about a detected service
@@ -937,6 +938,14 @@ func promptProjectInfo(info *ProjectInfo) error {
 		}
 	}
 
+	// Python venv app scope: when Python service(s) detected, offer to activate venv for all services
+	if hasPythonServices(info) && len(info.Services) > 0 {
+		fmt.Print("\nActivate Python venv for entire app scope (all services including frontend)? [y/N]: ")
+		if input := readLine(reader); strings.ToLower(strings.TrimSpace(input)) == "y" || strings.ToLower(strings.TrimSpace(input)) == "yes" {
+			info.VenvAppScope = true
+		}
+	}
+
 	return nil
 }
 
@@ -950,6 +959,14 @@ func generateConfig(info *ProjectInfo) string {
 	sb.WriteString(fmt.Sprintf("    description: \"%s\"\n", info.Description))
 	workdirAbs, _ := filepath.Abs(".")
 	sb.WriteString(fmt.Sprintf("    workdir: \"%s\"\n\n", workdirAbs))
+
+	// Python venv (app scope) when user opted in
+	if info.VenvAppScope && hasPythonServices(info) {
+		sb.WriteString("    python:\n")
+		sb.WriteString("      venv:\n")
+		sb.WriteString("        dir: \".venv\"\n")
+		sb.WriteString("        app_scope: true\n\n")
+	}
 
 	// Services
 	sb.WriteString("    services:\n")
@@ -1060,13 +1077,23 @@ func generateConfig(info *ProjectInfo) string {
 		pyDirs := pythonServiceDirs(info)
 		if len(pyDirs) > 0 {
 			sb.WriteString("      scripts:\n")
-			for _, d := range pyDirs {
-				if d == "" {
-					d = "."
+			if info.VenvAppScope {
+				// Single app-level venv: create .venv at root, install all Python deps
+				sb.WriteString("        - \"python3 -m venv .venv || true\"\n")
+				for _, d := range pyDirs {
+					if d == "" {
+						d = "."
+					}
+					sb.WriteString("        - \"if [ -f " + d + "/requirements.txt ]; then . .venv/bin/activate && pip install -r " + d + "/requirements.txt; fi\"\n")
 				}
-				sb.WriteString("        - \"cd " + d + " && python3 -m venv .venv || true\"\n")
-				// Install requirements only if present
-				sb.WriteString("        - \"cd " + d + " && if [ -f requirements.txt ]; then . .venv/bin/activate && pip install -r requirements.txt; fi\"\n")
+			} else {
+				for _, d := range pyDirs {
+					if d == "" {
+						d = "."
+					}
+					sb.WriteString("        - \"cd " + d + " && python3 -m venv .venv || true\"\n")
+					sb.WriteString("        - \"cd " + d + " && if [ -f requirements.txt ]; then . .venv/bin/activate && pip install -r requirements.txt; fi\"\n")
+				}
 			}
 		}
 	}
@@ -1089,6 +1116,13 @@ func generateConfig(info *ProjectInfo) string {
 	sb.WriteString("\n    install:\n")
 	sb.WriteString("      steps:\n")
 
+	// When app-scope venv, create .venv first so Python install steps can use it
+	if info.VenvAppScope && hasPythonServices(info) {
+		sb.WriteString("        - name: \"Create app Python venv\"\n")
+		sb.WriteString("          commands:\n")
+		sb.WriteString("            - \"python3 -m venv .venv || true\"\n")
+	}
+
 	// Root-level package manager steps using commands arrays
 	// Always check for common manifests to ensure root installs are included
 	if _, err := os.Stat("package.json"); err == nil || info.PackageMgr == "npm" {
@@ -1104,7 +1138,11 @@ func generateConfig(info *ProjectInfo) string {
 	if _, err := os.Stat("requirements.txt"); err == nil || info.PackageMgr == "pip" {
 		sb.WriteString("        - name: \"Install Python dependencies (root)\"\n")
 		sb.WriteString("          commands:\n")
-		sb.WriteString("            - \"pip install -r requirements.txt\"\n")
+		if info.VenvAppScope {
+			sb.WriteString("            - \". .venv/bin/activate && pip install -r requirements.txt\"\n")
+		} else {
+			sb.WriteString("            - \"pip install -r requirements.txt\"\n")
+		}
 	}
 	if _, err := os.Stat("Pipfile"); err == nil || info.PackageMgr == "pipenv" {
 		sb.WriteString("        - name: \"Install Pipenv dependencies (root)\"\n")
@@ -1162,7 +1200,15 @@ func generateConfig(info *ProjectInfo) string {
 			sb.WriteString(fmt.Sprintf("        - name: \"Install Python dependencies (%s)\"\n", svc.Name))
 			sb.WriteString(fmt.Sprintf("          workdir: \"%s\"\n", wd))
 			sb.WriteString("          commands:\n")
-			sb.WriteString("            - \"pip install -r requirements.txt\"\n")
+			if info.VenvAppScope {
+				relVenv := ".venv"
+				if wd != "." {
+					relVenv = filepath.Join("..", ".venv")
+				}
+				sb.WriteString(fmt.Sprintf("            - \". %s/bin/activate && pip install -r requirements.txt\"\n", relVenv))
+			} else {
+				sb.WriteString("            - \"pip install -r requirements.txt\"\n")
+			}
 		}
 		// Pipenv
 		if _, err := os.Stat(filepath.Join(wd, "Pipfile")); err == nil {

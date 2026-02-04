@@ -8,11 +8,11 @@ import (
 
 func TestDetectPackageManager(t *testing.T) {
 	tests := []struct {
-		name        string
-		files       []string
-		wantPkgMgr  string
-		wantType    string
-		wantDevCmd  string
+		name       string
+		files      []string
+		wantPkgMgr string
+		wantType   string
+		wantDevCmd string
 	}{
 		{
 			name:       "Node.js project",
@@ -294,6 +294,25 @@ func TestGenerateConfig(t *testing.T) {
 				"dependencies:",
 			},
 		},
+		{
+			name: "Python app with venv app scope",
+			info: &ProjectInfo{
+				Name:         "myapi",
+				Description:  "Python API",
+				PackageMgr:   "pip",
+				VenvAppScope: true,
+				Services: []ServiceInfo{
+					{Name: "api", Type: "api", Command: "uvicorn main:app", Language: "python", Directory: "backend", Port: 8000},
+					{Name: "frontend", Type: "web", Command: "npm run dev", Port: 3000},
+				},
+			},
+			contains: []string{
+				"python:",
+				"venv:",
+				"dir: \".venv\"",
+				"app_scope: true",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -357,7 +376,7 @@ The app runs on port 3000
 func containsString(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
 		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
-		len(s) > len(substr)+1 && findSubstring(s, substr)))
+			len(s) > len(substr)+1 && findSubstring(s, substr)))
 }
 
 func findSubstring(s, substr string) bool {

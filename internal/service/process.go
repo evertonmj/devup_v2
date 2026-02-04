@@ -8,12 +8,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"devup/internal/config"
 	"devup/internal/log"
+	"devup/internal/python"
 )
 
 // Commander is an interface that abstracts the os/exec.Cmd behavior.
@@ -75,10 +77,35 @@ var newCommand = func(ctx context.Context, name string, arg ...string) Commander
 	}
 }
 
+func mergeEnv(base []string, overrides []string) []string {
+	out := make([]string, len(base))
+	copy(out, base)
+	for _, o := range overrides {
+		if idx := strings.Index(o, "="); idx > 0 {
+			key := o[:idx]
+			out = setEnv(out, key, o[idx+1:])
+		}
+	}
+	return out
+}
+
+func setEnv(env []string, key, value string) []string {
+	prefix := key + "="
+	for i, e := range env {
+		if strings.HasPrefix(e, prefix) {
+			env[i] = prefix + value
+			return env
+		}
+	}
+	return append(env, prefix+value)
+}
+
 // ProcessRunner manages a single process-based service
 type ProcessRunner struct {
 	config      config.Service
 	workDir     string
+	appWorkDir  string
+	pythonCfg   *config.PythonConfig
 	cmd         Commander
 	logFile     *os.File
 	startTime   time.Time
@@ -86,8 +113,9 @@ type ProcessRunner struct {
 	monitorDone chan struct{} // closed when monitor goroutine finishes
 }
 
-// NewProcessRunner creates a new process runner for a service
-func NewProcessRunner(svc config.Service, appWorkDir string) (*ProcessRunner, error) {
+// NewProcessRunner creates a new process runner for a service.
+// pythonCfg can be nil; when set with app_scope, venv is activated for all services.
+func NewProcessRunner(svc config.Service, appWorkDir string, pythonCfg *config.PythonConfig) (*ProcessRunner, error) {
 	// Determine working directory
 	workDir := appWorkDir
 	if svc.WorkDir != "" {
@@ -99,8 +127,10 @@ func NewProcessRunner(svc config.Service, appWorkDir string) (*ProcessRunner, er
 	}
 
 	return &ProcessRunner{
-		config:  svc,
-		workDir: workDir,
+		config:     svc,
+		workDir:    workDir,
+		appWorkDir: appWorkDir,
+		pythonCfg:  pythonCfg,
 	}, nil
 }
 
@@ -117,11 +147,28 @@ func (p *ProcessRunner) Start(ctx context.Context) error {
 	cmd := newCommand(ctx, "bash", "-c", p.config.Command)
 	cmd.SetDir(p.workDir)
 
-	// Set environment variables
-	cmd.SetEnv(os.Environ())
-	for k, v := range p.config.Environment {
-		cmd.SetEnv(append(os.Environ(), fmt.Sprintf("%s=%s", k, v)))
+	// Build environment
+	baseEnv := os.Environ()
+	if p.pythonCfg != nil && p.pythonCfg.Venv != nil && p.pythonCfg.Venv.AppScope {
+		venvDir := p.pythonCfg.Venv.Dir
+		if venvDir == "" {
+			venvDir = python.DefaultDir
+		}
+		absVenv := filepath.Join(p.appWorkDir, venvDir)
+		pythonCmd := python.DefaultVersion
+		if p.pythonCfg.Venv.Version != "" {
+			pythonCmd = p.pythonCfg.Venv.Version
+		}
+		if err := python.EnsureVenv(p.appWorkDir, venvDir, pythonCmd); err != nil {
+			return fmt.Errorf("ensure venv: %w", err)
+		}
+		venvEnv := python.VenvEnv(absVenv)
+		baseEnv = mergeEnv(baseEnv, venvEnv)
 	}
+	for k, v := range p.config.Environment {
+		baseEnv = setEnv(baseEnv, k, v)
+	}
+	cmd.SetEnv(baseEnv)
 
 	// Create a new process group so we can kill all child processes
 	cmd.SetSysProcAttr(&syscall.SysProcAttr{
