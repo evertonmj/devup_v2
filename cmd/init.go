@@ -376,22 +376,59 @@ func analyzeDocumentation(dir string, info *ProjectInfo) {
 	}
 }
 
-func detectProjectStructure(dir string, info *ProjectInfo) {
-	// Patterns: dir name prefix -> default service (name, type, port)
-	// Supports both exact ("frontend") and prefix ("frontend-spring-boot-...") matching
-	prefixes := []struct {
-		prefix string
-		svc    ServiceInfo
-	}{
-		{"frontend", ServiceInfo{Name: "frontend", Type: "web", Port: 3000}},
-		{"ui", ServiceInfo{Name: "ui", Type: "web", Port: 3000}},
-		{"web", ServiceInfo{Name: "web", Type: "web", Port: 3000}},
-		{"client", ServiceInfo{Name: "client", Type: "web", Port: 3000}},
-		{"backend", ServiceInfo{Name: "backend", Type: "api", Port: 8080}},
-		{"api", ServiceInfo{Name: "api", Type: "api", Port: 8080}},
-		{"server", ServiceInfo{Name: "server", Type: "api", Port: 8080}},
-	}
+// serviceHints defines keywords to match dir names (prefix, suffix, or contains) and the resulting service.
+// Order matters: longer/more specific hints first (e.g. "frontend" before "front").
+var serviceHints = []struct {
+	keyword string // matches as prefix, suffix, or word in dir name
+	svc     ServiceInfo
+}{
+	{"frontend", ServiceInfo{Name: "frontend", Type: "web", Port: 3000}},
+	{"backend", ServiceInfo{Name: "backend", Type: "api", Port: 8080}},
+	{"fullstack", ServiceInfo{Name: "app", Type: "api", Port: 3000}},
+	{"restapi", ServiceInfo{Name: "api", Type: "api", Port: 8080}},
+	{"rest-api", ServiceInfo{Name: "api", Type: "api", Port: 8080}},
+	{"graphql", ServiceInfo{Name: "api", Type: "api", Port: 8080}},
+	{"service", ServiceInfo{Name: "service", Type: "api", Port: 8080}},
+	{"services", ServiceInfo{Name: "service", Type: "api", Port: 8080}},
+	{"api", ServiceInfo{Name: "api", Type: "api", Port: 8080}},
+	{"server", ServiceInfo{Name: "server", Type: "api", Port: 8080}},
+	{"client", ServiceInfo{Name: "client", Type: "web", Port: 3000}},
+	{"ui", ServiceInfo{Name: "ui", Type: "web", Port: 3000}},
+	{"web", ServiceInfo{Name: "web", Type: "web", Port: 3000}},
+	{"app", ServiceInfo{Name: "app", Type: "api", Port: 8080}},
+	{"front", ServiceInfo{Name: "frontend", Type: "web", Port: 3000}},
+	{"back", ServiceInfo{Name: "backend", Type: "api", Port: 8080}},
+	{"svc", ServiceInfo{Name: "service", Type: "api", Port: 8080}},
+	{"fe", ServiceInfo{Name: "frontend", Type: "web", Port: 3000}},
+	{"be", ServiceInfo{Name: "backend", Type: "api", Port: 8080}},
+}
 
+// matchesServiceHint returns true if dirName matches the keyword (prefix, suffix, or contains as word).
+func matchesServiceHint(dirName, keyword string) bool {
+	if len(keyword) > len(dirName) {
+		return false
+	}
+	if dirName == keyword {
+		return true
+	}
+	sep := "-" + keyword
+	if strings.HasPrefix(dirName, keyword+"-") || strings.HasPrefix(dirName, keyword+"_") {
+		return true
+	}
+	if strings.HasSuffix(dirName, "-"+keyword) || strings.HasSuffix(dirName, "_"+keyword) {
+		return true
+	}
+	// contains as a word (surrounded by - or _ or at boundary)
+	if strings.Contains(dirName, sep) || strings.Contains(dirName, "_"+keyword+"_") || strings.Contains(dirName, "_"+keyword+"-") {
+		return true
+	}
+	if strings.Contains(dirName, "-"+keyword+"_") || strings.Contains(dirName, "-"+keyword+"-") {
+		return true
+	}
+	return false
+}
+
+func detectProjectStructure(dir string, info *ProjectInfo) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return
@@ -402,9 +439,9 @@ func detectProjectStructure(dir string, info *ProjectInfo) {
 			continue
 		}
 		name := strings.ToLower(entry.Name())
-		for _, p := range prefixes {
-			if name == p.prefix || strings.HasPrefix(name, p.prefix+"-") || strings.HasPrefix(name, p.prefix+"_") {
-				service := p.svc
+		for _, h := range serviceHints {
+			if matchesServiceHint(name, h.keyword) {
+				service := h.svc
 				service.Directory = entry.Name()
 				subdir := filepath.Join(dir, entry.Name())
 				service = inferServiceStack(subdir, service)
@@ -532,12 +569,12 @@ func detectSubprojects(dir string, info *ProjectInfo) {
 }
 
 // deriveServiceName returns a short service name from directory name.
-// e.g. "frontend-spring-boot-react" -> "frontend", "backend-api" -> "backend"
+// Uses same hint matching (prefix, suffix, contains) and similar words.
 func deriveServiceName(dirName string) string {
 	lower := strings.ToLower(dirName)
-	for _, prefix := range []string{"frontend", "backend", "api", "server", "client", "ui", "web"} {
-		if lower == prefix || strings.HasPrefix(lower, prefix+"-") || strings.HasPrefix(lower, prefix+"_") {
-			return prefix
+	for _, h := range serviceHints {
+		if matchesServiceHint(lower, h.keyword) {
+			return h.svc.Name
 		}
 	}
 	// Use first part before hyphen/underscore, or full name if short

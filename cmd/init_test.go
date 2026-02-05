@@ -168,6 +168,12 @@ func TestDetectProjectStructure(t *testing.T) {
 			wantServices: 2,
 			checkService: "backend",
 		},
+		{
+			name:         "Suffix-style subprojects (xxx-frontend, xxx-backend)",
+			directories:  []string{"my-app-frontend", "my-app-backend"},
+			wantServices: 2,
+			checkService: "frontend",
+		},
 	}
 
 	for _, tt := range tests {
