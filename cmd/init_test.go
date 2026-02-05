@@ -162,6 +162,12 @@ func TestDetectProjectStructure(t *testing.T) {
 			wantServices: 1, // Should create default service
 			checkService: "app",
 		},
+		{
+			name:         "Prefix-style subprojects (frontend-xxx, backend-xxx)",
+			directories:  []string{"frontend-spring-boot-react", "backend-spring-boot-jpa"},
+			wantServices: 2,
+			checkService: "backend",
+		},
 	}
 
 	for _, tt := range tests {

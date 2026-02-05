@@ -377,15 +377,19 @@ func analyzeDocumentation(dir string, info *ProjectInfo) {
 }
 
 func detectProjectStructure(dir string, info *ProjectInfo) {
-	// Common patterns - only add if directory actually exists
-	patterns := map[string]ServiceInfo{
-		"frontend": {Name: "frontend", Type: "web", Port: 3000},
-		"ui":       {Name: "ui", Type: "web", Port: 3000},
-		"web":      {Name: "web", Type: "web", Port: 3000},
-		"client":   {Name: "client", Type: "web", Port: 3000},
-		"backend":  {Name: "backend", Type: "api", Port: 8000},
-		"api":      {Name: "api", Type: "api", Port: 8000},
-		"server":   {Name: "server", Type: "api", Port: 8000},
+	// Patterns: dir name prefix -> default service (name, type, port)
+	// Supports both exact ("frontend") and prefix ("frontend-spring-boot-...") matching
+	prefixes := []struct {
+		prefix string
+		svc    ServiceInfo
+	}{
+		{"frontend", ServiceInfo{Name: "frontend", Type: "web", Port: 3000}},
+		{"ui", ServiceInfo{Name: "ui", Type: "web", Port: 3000}},
+		{"web", ServiceInfo{Name: "web", Type: "web", Port: 3000}},
+		{"client", ServiceInfo{Name: "client", Type: "web", Port: 3000}},
+		{"backend", ServiceInfo{Name: "backend", Type: "api", Port: 8080}},
+		{"api", ServiceInfo{Name: "api", Type: "api", Port: 8080}},
+		{"server", ServiceInfo{Name: "server", Type: "api", Port: 8080}},
 	}
 
 	entries, err := os.ReadDir(dir)
@@ -398,25 +402,20 @@ func detectProjectStructure(dir string, info *ProjectInfo) {
 			continue
 		}
 		name := strings.ToLower(entry.Name())
-		if service, ok := patterns[name]; ok {
-			service.Directory = entry.Name()
-			// Check if it has its own package.json or go.mod
-			if _, err := os.Stat(filepath.Join(dir, entry.Name(), "package.json")); err == nil {
-				service.Command = "npm run dev"
-				service.Language = "node"
-			} else if _, err := os.Stat(filepath.Join(dir, entry.Name(), "go.mod")); err == nil {
-				service.Command = "go run ."
-				service.Language = "go"
-			} else if _, err := os.Stat(filepath.Join(dir, entry.Name(), "requirements.txt")); err == nil {
-				service.Command = "python main.py"
-				service.Language = "python"
-			} else if _, err := os.Stat(filepath.Join(dir, entry.Name(), "pyproject.toml")); err == nil {
-				service.Command = "python main.py"
-				service.Language = "python"
+		for _, p := range prefixes {
+			if name == p.prefix || strings.HasPrefix(name, p.prefix+"-") || strings.HasPrefix(name, p.prefix+"_") {
+				service := p.svc
+				service.Directory = entry.Name()
+				subdir := filepath.Join(dir, entry.Name())
+				service = inferServiceStack(subdir, service)
+				info.Services = append(info.Services, service)
+				break
 			}
-			info.Services = append(info.Services, service)
 		}
 	}
+
+	// Fallback: scan all subdirs for package manifests (catches any subproject)
+	detectSubprojects(dir, info)
 
 	// If no services detected, create a default one
 	if len(info.Services) == 0 {
@@ -429,6 +428,127 @@ func detectProjectStructure(dir string, info *ProjectInfo) {
 		}
 		info.Services = append(info.Services, defaultService)
 	}
+}
+
+// inferServiceStack detects the stack (npm, maven, etc.) in subdir and sets Command/Language.
+func inferServiceStack(subdir string, svc ServiceInfo) ServiceInfo {
+	checks := []struct {
+		file     string
+		cmd      string
+		language string
+	}{
+		{"package.json", "npm run dev", "node"},
+		{"go.mod", "go run .", "go"},
+		{"requirements.txt", "python main.py", "python"},
+		{"pyproject.toml", "python main.py", "python"},
+		{"pom.xml", "mvn spring-boot:run", "java"},
+		{"build.gradle", "./gradlew bootRun", "java"},
+		{"build.gradle.kts", "./gradlew bootRun", "java"},
+		{"Cargo.toml", "cargo run", "rust"},
+		{"Gemfile", "bundle exec rails s", "ruby"},
+		{"composer.json", "php artisan serve", "php"},
+	}
+	for _, c := range checks {
+		if _, err := os.Stat(filepath.Join(subdir, c.file)); err == nil {
+			svc.Command = c.cmd
+			svc.Language = c.language
+			if c.language == "node" {
+				if pkg := readFileIfExists(filepath.Join(subdir, "package.json")); strings.Contains(pkg, "react-scripts") {
+					svc.Command = "npm start"
+				}
+			}
+			return svc
+		}
+	}
+	return svc
+}
+
+// detectSubprojects scans all subdirectories for package manifests and adds them as services.
+// Skips directories already present in info.Services.
+func detectSubprojects(dir string, info *ProjectInfo) {
+	existingDirs := make(map[string]bool)
+	for _, s := range info.Services {
+		if s.Directory != "" && s.Directory != "." {
+			existingDirs[s.Directory] = true
+		}
+	}
+
+	manifests := []struct {
+		file        string
+		cmd         string
+		language    string
+		svcType     string
+		defaultPort int
+	}{
+		{"package.json", "npm run dev", "node", "web", 3000},
+		{"pom.xml", "mvn spring-boot:run", "java", "api", 8080},
+		{"build.gradle", "./gradlew bootRun", "java", "api", 8080},
+		{"build.gradle.kts", "./gradlew bootRun", "java", "api", 8080},
+		{"go.mod", "go run .", "go", "api", 8080},
+		{"requirements.txt", "python main.py", "python", "api", 8000},
+		{"pyproject.toml", "python main.py", "python", "api", 8000},
+		{"Cargo.toml", "cargo run", "rust", "api", 8080},
+		{"Gemfile", "bundle exec rails s", "ruby", "api", 3000},
+		{"composer.json", "php artisan serve", "php", "api", 8000},
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if existingDirs[entry.Name()] {
+			continue
+		}
+		subdir := filepath.Join(dir, entry.Name())
+		for _, m := range manifests {
+			if _, err := os.Stat(filepath.Join(subdir, m.file)); err == nil {
+				name := deriveServiceName(entry.Name())
+				cmd := m.cmd
+				svcType := m.svcType
+				if m.language == "node" {
+					if pkg := readFileIfExists(filepath.Join(subdir, "package.json")); strings.Contains(pkg, "react-scripts") {
+						cmd = "npm start"
+						svcType = "web"
+					}
+				}
+				info.Services = append(info.Services, ServiceInfo{
+					Name:      name,
+					Type:      svcType,
+					Command:   cmd,
+					Port:      m.defaultPort,
+					Directory: entry.Name(),
+					Language:  m.language,
+				})
+				existingDirs[entry.Name()] = true
+				break
+			}
+		}
+	}
+}
+
+// deriveServiceName returns a short service name from directory name.
+// e.g. "frontend-spring-boot-react" -> "frontend", "backend-api" -> "backend"
+func deriveServiceName(dirName string) string {
+	lower := strings.ToLower(dirName)
+	for _, prefix := range []string{"frontend", "backend", "api", "server", "client", "ui", "web"} {
+		if lower == prefix || strings.HasPrefix(lower, prefix+"-") || strings.HasPrefix(lower, prefix+"_") {
+			return prefix
+		}
+	}
+	// Use first part before hyphen/underscore, or full name if short
+	parts := strings.FieldsFunc(dirName, func(r rune) bool { return r == '-' || r == '_' })
+	if len(parts) > 0 && len(parts[0]) <= 20 {
+		return strings.ToLower(parts[0])
+	}
+	if len(dirName) <= 20 {
+		return strings.ToLower(dirName)
+	}
+	return strings.ToLower(parts[0])
 }
 
 func detectServices(dir string, info *ProjectInfo) {
