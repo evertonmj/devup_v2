@@ -464,6 +464,7 @@ func detectProjectStructure(dir string, info *ProjectInfo) {
 		for _, h := range serviceHints {
 			if matchesServiceHint(name, h.keyword) {
 				service := h.svc
+				service.Name = deriveServiceName(entry.Name(), h.keyword, h.svc.Name)
 				service.Directory = entry.Name()
 				subdir := filepath.Join(dir, entry.Name())
 				service = inferServiceStack(subdir, service)
@@ -475,6 +476,9 @@ func detectProjectStructure(dir string, info *ProjectInfo) {
 
 	// Fallback: scan all subdirs for package manifests (catches any subproject)
 	detectSubprojects(dir, info)
+
+	// Ensure unique service names (e.g. user-service + auth-service both deriving to "service")
+	ensureUniqueServiceNames(info)
 
 	// If no services detected, create a default one
 	if len(info.Services) == 0 {
@@ -566,7 +570,7 @@ func detectSubprojects(dir string, info *ProjectInfo) {
 		subdir := filepath.Join(dir, entry.Name())
 		for _, m := range manifests {
 			if _, err := os.Stat(filepath.Join(subdir, m.file)); err == nil {
-				name := deriveServiceName(entry.Name())
+				name := deriveServiceName(entry.Name(), "", "api")
 				cmd := m.cmd
 				svcType := m.svcType
 				if m.language == "node" {
@@ -590,24 +594,95 @@ func detectSubprojects(dir string, info *ProjectInfo) {
 	}
 }
 
-// deriveServiceName returns a short service name from directory name.
-// Uses same hint matching (prefix, suffix, contains) and similar words.
-func deriveServiceName(dirName string) string {
+// deriveServiceName returns a unique service name from directory name, tied to the scanned app.
+// When matchedKeyword is set, extracts the distinguishing part for suffix matches (e.g. "user" from "user-service")
+// to avoid duplicates when multiple dirs map to the same hint (user-service, auth-service -> "service").
+// defaultName is used for prefix/exact matches and when no hint matched (for detectSubprojects).
+func deriveServiceName(dirName, matchedKeyword, defaultName string) string {
 	lower := strings.ToLower(dirName)
-	for _, h := range serviceHints {
-		if matchesServiceHint(lower, h.keyword) {
-			return h.svc.Name
+
+	// For suffix match with "service"/"api" (often duplicated), extract qualifier: "user-service" -> "user"
+	genericKeywords := map[string]bool{"service": true, "services": true, "svc": true, "api": true, "app": true}
+	if matchedKeyword != "" && genericKeywords[matchedKeyword] &&
+		(strings.HasSuffix(lower, "-"+matchedKeyword) || strings.HasSuffix(lower, "_"+matchedKeyword)) {
+		before := strings.TrimSuffix(lower, "-"+matchedKeyword)
+		before = strings.TrimSuffix(before, "_"+matchedKeyword)
+		if before != "" {
+			if idx := strings.LastIndexAny(before, "-_"); idx >= 0 && idx < len(before)-1 {
+				return before[idx+1:]
+			}
+			return before
 		}
 	}
-	// Use first part before hyphen/underscore, or full name if short
+
+	// Prefix or exact match: use default (e.g. "frontend", "backend")
+	if matchedKeyword != "" {
+		return defaultName
+	}
+
+	// No hint matched: use first meaningful part from directory
 	parts := strings.FieldsFunc(dirName, func(r rune) bool { return r == '-' || r == '_' })
-	if len(parts) > 0 && len(parts[0]) <= 20 {
+	for _, p := range parts {
+		p = strings.ToLower(p)
+		if p != "" && p != "service" && p != "app" && len(p) <= 20 {
+			return p
+		}
+	}
+	if len(parts) > 0 {
 		return strings.ToLower(parts[0])
 	}
-	if len(dirName) <= 20 {
-		return strings.ToLower(dirName)
+	if defaultName != "" {
+		return defaultName
 	}
-	return strings.ToLower(parts[0])
+	return "app"
+}
+
+// ensureUniqueServiceNames deduplicates service names using directory-derived names when needed.
+func ensureUniqueServiceNames(info *ProjectInfo) {
+	used := make(map[string]bool)
+	for i := range info.Services {
+		name := info.Services[i].Name
+		dir := info.Services[i].Directory
+		base := name
+		for used[name] {
+			// Disambiguate: use distinguishing part from directory (e.g. "user" from "user-service")
+			parts := strings.FieldsFunc(dir, func(r rune) bool { return r == '-' || r == '_' })
+			found := false
+			for _, p := range parts {
+				cand := strings.ToLower(p)
+				if cand != "" && cand != base && !used[cand] {
+					name = cand
+					found = true
+					break
+				}
+			}
+			if !found {
+				// Use base + first dir segment: "service" + "user" -> "service-user"
+				if len(parts) > 0 {
+					name = base + "-" + strings.ToLower(parts[0])
+				} else {
+					slug := strings.ToLower(strings.Trim(dir, "-_"))
+					if slug == "" {
+						slug = "app"
+					}
+					name = base + "-" + slug
+				}
+			}
+			if !used[name] {
+				break
+			}
+			// Numeric suffix as last resort
+			for n := 1; n < 100; n++ {
+				cand := fmt.Sprintf("%s-%d", base, n)
+				if !used[cand] {
+					name = cand
+					break
+				}
+			}
+		}
+		used[name] = true
+		info.Services[i].Name = name
+	}
 }
 
 func detectServices(dir string, info *ProjectInfo) {

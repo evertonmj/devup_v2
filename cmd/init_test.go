@@ -174,6 +174,12 @@ func TestDetectProjectStructure(t *testing.T) {
 			wantServices: 2,
 			checkService: "frontend",
 		},
+		{
+			name:         "Multiple *-service dirs get unique names (user-service, auth-service)",
+			directories:  []string{"user-service", "auth-service"},
+			wantServices: 2,
+			checkService: "user",
+		},
 	}
 
 	for _, tt := range tests {

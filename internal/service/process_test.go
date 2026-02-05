@@ -230,4 +230,38 @@ func TestProcessRunner_StopWhenNotStarted(t *testing.T) {
 	}
 }
 
+func TestProcessRunner_WithPythonVenvAppScope(t *testing.T) {
+	tmpDir := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(tmpDir, "logs"), 0755)
+	venvDir := filepath.Join(tmpDir, ".venv")
+	if err := os.MkdirAll(venvDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(venvDir, "pyvenv.cfg"), []byte("home = /usr\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	origWd, _ := os.Getwd()
+	_ = os.Chdir(tmpDir)
+	defer func() { _ = os.Chdir(origWd) }()
 
+	svc := config.Service{
+		Name:    "py-svc",
+		Command: "echo ok",
+		LogFile: "logs/py.log",
+	}
+	pythonCfg := &config.PythonConfig{
+		Venv: &config.PythonVenvConfig{Dir: ".venv", AppScope: true},
+	}
+	runner, err := NewProcessRunner(svc, tmpDir, pythonCfg)
+	if err != nil {
+		t.Fatalf("NewProcessRunner: %v", err)
+	}
+	ctx := context.Background()
+	if err := runner.Start(ctx); err != nil {
+		t.Fatalf("Start with venv: %v", err)
+	}
+	defer func() { _ = runner.Stop(ctx) }()
+	if st := runner.Status(); !st.Running {
+		t.Error("expected runner to be running")
+	}
+}
