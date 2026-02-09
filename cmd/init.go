@@ -212,6 +212,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 // ProjectInfo holds detected project information
 type ProjectInfo struct {
+
 	Name        string
 	Description string
 	Type        string // web, api, cli, library, etc.
@@ -224,6 +225,9 @@ type ProjectInfo struct {
 	DevCmd      string
 	InstallCmds []CommandInfo
 	SetupCmds   []CommandInfo
+  VenvAppScope    bool              // when true, activate Python venv for entire app (all services including frontend)
+	PythonVersion   string            // Python executable for venv (e.g. "python3", "python3.11")
+	RuntimeVersions map[string]string 
 }
 
 // ServiceInfo holds information about a detected service
@@ -242,6 +246,8 @@ type ServiceInfo struct {
 	DockerEnvironment map[string]string
 	// Language hint (e.g., "python", "node", "go")
 	Language string
+	// Framework hint (e.g., "uvicorn", "flask", "django") used to set command
+	Framework string
 }
 
 // CommandInfo holds a command and its working directory
@@ -281,6 +287,9 @@ func scanProject(dir string) (*ProjectInfo, error) {
 	if len(info.Services) == 0 {
 		detectServices(absDir, info)
 	}
+
+	// Detect frameworks and set start commands accordingly (e.g. uvicorn, flask, django)
+	detectFrameworks(dir, info)
 
 	// Infer related backing services like databases
 	detectDatabaseServices(dir, info)
@@ -389,18 +398,59 @@ func analyzeDocumentation(dir string, info *ProjectInfo) {
 	}
 }
 
-func detectProjectStructure(dir string, info *ProjectInfo) {
-	// Common patterns - only add if directory actually exists
-	patterns := map[string]ServiceInfo{
-		"frontend": {Name: "frontend", Type: "web", Port: 3000},
-		"ui":       {Name: "ui", Type: "web", Port: 3000},
-		"web":      {Name: "web", Type: "web", Port: 3000},
-		"client":   {Name: "client", Type: "web", Port: 3000},
-		"backend":  {Name: "backend", Type: "api", Port: 8000},
-		"api":      {Name: "api", Type: "api", Port: 8000},
-		"server":   {Name: "server", Type: "api", Port: 8000},
-	}
+// serviceHints defines keywords to match dir names (prefix, suffix, or contains) and the resulting service.
+// Order matters: longer/more specific hints first (e.g. "frontend" before "front").
+var serviceHints = []struct {
+	keyword string // matches as prefix, suffix, or word in dir name
+	svc     ServiceInfo
+}{
+	{"frontend", ServiceInfo{Name: "frontend", Type: "web", Port: 3000}},
+	{"backend", ServiceInfo{Name: "backend", Type: "api", Port: 8080}},
+	{"fullstack", ServiceInfo{Name: "app", Type: "api", Port: 3000}},
+	{"restapi", ServiceInfo{Name: "api", Type: "api", Port: 8080}},
+	{"rest-api", ServiceInfo{Name: "api", Type: "api", Port: 8080}},
+	{"graphql", ServiceInfo{Name: "api", Type: "api", Port: 8080}},
+	{"service", ServiceInfo{Name: "service", Type: "api", Port: 8080}},
+	{"services", ServiceInfo{Name: "service", Type: "api", Port: 8080}},
+	{"api", ServiceInfo{Name: "api", Type: "api", Port: 8080}},
+	{"server", ServiceInfo{Name: "server", Type: "api", Port: 8080}},
+	{"client", ServiceInfo{Name: "client", Type: "web", Port: 3000}},
+	{"ui", ServiceInfo{Name: "ui", Type: "web", Port: 3000}},
+	{"web", ServiceInfo{Name: "web", Type: "web", Port: 3000}},
+	{"app", ServiceInfo{Name: "app", Type: "api", Port: 8080}},
+	{"front", ServiceInfo{Name: "frontend", Type: "web", Port: 3000}},
+	{"back", ServiceInfo{Name: "backend", Type: "api", Port: 8080}},
+	{"svc", ServiceInfo{Name: "service", Type: "api", Port: 8080}},
+	{"fe", ServiceInfo{Name: "frontend", Type: "web", Port: 3000}},
+	{"be", ServiceInfo{Name: "backend", Type: "api", Port: 8080}},
+}
 
+// matchesServiceHint returns true if dirName matches the keyword (prefix, suffix, or contains as word).
+func matchesServiceHint(dirName, keyword string) bool {
+	if len(keyword) > len(dirName) {
+		return false
+	}
+	if dirName == keyword {
+		return true
+	}
+	sep := "-" + keyword
+	if strings.HasPrefix(dirName, keyword+"-") || strings.HasPrefix(dirName, keyword+"_") {
+		return true
+	}
+	if strings.HasSuffix(dirName, "-"+keyword) || strings.HasSuffix(dirName, "_"+keyword) {
+		return true
+	}
+	// contains as a word (surrounded by - or _ or at boundary)
+	if strings.Contains(dirName, sep) || strings.Contains(dirName, "_"+keyword+"_") || strings.Contains(dirName, "_"+keyword+"-") {
+		return true
+	}
+	if strings.Contains(dirName, "-"+keyword+"_") || strings.Contains(dirName, "-"+keyword+"-") {
+		return true
+	}
+	return false
+}
+
+func detectProjectStructure(dir string, info *ProjectInfo) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return
@@ -411,25 +461,24 @@ func detectProjectStructure(dir string, info *ProjectInfo) {
 			continue
 		}
 		name := strings.ToLower(entry.Name())
-		if service, ok := patterns[name]; ok {
-			service.Directory = entry.Name()
-			// Check if it has its own package.json or go.mod
-			if _, err := os.Stat(filepath.Join(dir, entry.Name(), "package.json")); err == nil {
-				service.Command = "npm run dev"
-				service.Language = "node"
-			} else if _, err := os.Stat(filepath.Join(dir, entry.Name(), "go.mod")); err == nil {
-				service.Command = "go run ."
-				service.Language = "go"
-			} else if _, err := os.Stat(filepath.Join(dir, entry.Name(), "requirements.txt")); err == nil {
-				service.Command = "python main.py"
-				service.Language = "python"
-			} else if _, err := os.Stat(filepath.Join(dir, entry.Name(), "pyproject.toml")); err == nil {
-				service.Command = "python main.py"
-				service.Language = "python"
+		for _, h := range serviceHints {
+			if matchesServiceHint(name, h.keyword) {
+				service := h.svc
+				service.Name = deriveServiceName(entry.Name(), h.keyword, h.svc.Name)
+				service.Directory = entry.Name()
+				subdir := filepath.Join(dir, entry.Name())
+				service = inferServiceStack(subdir, service)
+				info.Services = append(info.Services, service)
+				break
 			}
-			info.Services = append(info.Services, service)
 		}
 	}
+
+	// Fallback: scan all subdirs for package manifests (catches any subproject)
+	detectSubprojects(dir, info)
+
+	// Ensure unique service names (e.g. user-service + auth-service both deriving to "service")
+	ensureUniqueServiceNames(info)
 
 	// If no services detected, create a default one
 	if len(info.Services) == 0 {
@@ -441,6 +490,198 @@ func detectProjectStructure(dir string, info *ProjectInfo) {
 			Directory: dir,
 		}
 		info.Services = append(info.Services, defaultService)
+	}
+}
+
+// inferServiceStack detects the stack (npm, maven, etc.) in subdir and sets Command/Language.
+func inferServiceStack(subdir string, svc ServiceInfo) ServiceInfo {
+	checks := []struct {
+		file     string
+		cmd      string
+		language string
+	}{
+		{"package.json", "npm run dev", "node"},
+		{"go.mod", "go run .", "go"},
+		{"requirements.txt", "python main.py", "python"},
+		{"pyproject.toml", "python main.py", "python"},
+		{"pom.xml", "mvn spring-boot:run", "java"},
+		{"build.gradle", "./gradlew bootRun", "java"},
+		{"build.gradle.kts", "./gradlew bootRun", "java"},
+		{"Cargo.toml", "cargo run", "rust"},
+		{"Gemfile", "bundle exec rails s", "ruby"},
+		{"composer.json", "php artisan serve", "php"},
+	}
+	for _, c := range checks {
+		if _, err := os.Stat(filepath.Join(subdir, c.file)); err == nil {
+			svc.Command = c.cmd
+			svc.Language = c.language
+			if c.language == "node" {
+				if pkg := readFileIfExists(filepath.Join(subdir, "package.json")); strings.Contains(pkg, "react-scripts") {
+					svc.Command = "npm start"
+				}
+			}
+			return svc
+		}
+	}
+	return svc
+}
+
+// detectSubprojects scans all subdirectories for package manifests and adds them as services.
+// Skips directories already present in info.Services.
+func detectSubprojects(dir string, info *ProjectInfo) {
+	existingDirs := make(map[string]bool)
+	for _, s := range info.Services {
+		if s.Directory != "" && s.Directory != "." {
+			existingDirs[s.Directory] = true
+		}
+	}
+
+	manifests := []struct {
+		file        string
+		cmd         string
+		language    string
+		svcType     string
+		defaultPort int
+	}{
+		{"package.json", "npm run dev", "node", "web", 3000},
+		{"pom.xml", "mvn spring-boot:run", "java", "api", 8080},
+		{"build.gradle", "./gradlew bootRun", "java", "api", 8080},
+		{"build.gradle.kts", "./gradlew bootRun", "java", "api", 8080},
+		{"go.mod", "go run .", "go", "api", 8080},
+		{"requirements.txt", "python main.py", "python", "api", 8000},
+		{"pyproject.toml", "python main.py", "python", "api", 8000},
+		{"Cargo.toml", "cargo run", "rust", "api", 8080},
+		{"Gemfile", "bundle exec rails s", "ruby", "api", 3000},
+		{"composer.json", "php artisan serve", "php", "api", 8000},
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if existingDirs[entry.Name()] {
+			continue
+		}
+		subdir := filepath.Join(dir, entry.Name())
+		for _, m := range manifests {
+			if _, err := os.Stat(filepath.Join(subdir, m.file)); err == nil {
+				name := deriveServiceName(entry.Name(), "", "api")
+				cmd := m.cmd
+				svcType := m.svcType
+				if m.language == "node" {
+					if pkg := readFileIfExists(filepath.Join(subdir, "package.json")); strings.Contains(pkg, "react-scripts") {
+						cmd = "npm start"
+						svcType = "web"
+					}
+				}
+				info.Services = append(info.Services, ServiceInfo{
+					Name:      name,
+					Type:      svcType,
+					Command:   cmd,
+					Port:      m.defaultPort,
+					Directory: entry.Name(),
+					Language:  m.language,
+				})
+				existingDirs[entry.Name()] = true
+				break
+			}
+		}
+	}
+}
+
+// deriveServiceName returns a unique service name from directory name, tied to the scanned app.
+// When matchedKeyword is set, extracts the distinguishing part for suffix matches (e.g. "user" from "user-service")
+// to avoid duplicates when multiple dirs map to the same hint (user-service, auth-service -> "service").
+// defaultName is used for prefix/exact matches and when no hint matched (for detectSubprojects).
+func deriveServiceName(dirName, matchedKeyword, defaultName string) string {
+	lower := strings.ToLower(dirName)
+
+	// For suffix match with "service"/"api" (often duplicated), extract qualifier: "user-service" -> "user"
+	genericKeywords := map[string]bool{"service": true, "services": true, "svc": true, "api": true, "app": true}
+	if matchedKeyword != "" && genericKeywords[matchedKeyword] &&
+		(strings.HasSuffix(lower, "-"+matchedKeyword) || strings.HasSuffix(lower, "_"+matchedKeyword)) {
+		before := strings.TrimSuffix(lower, "-"+matchedKeyword)
+		before = strings.TrimSuffix(before, "_"+matchedKeyword)
+		if before != "" {
+			if idx := strings.LastIndexAny(before, "-_"); idx >= 0 && idx < len(before)-1 {
+				return before[idx+1:]
+			}
+			return before
+		}
+	}
+
+	// Prefix or exact match: use default (e.g. "frontend", "backend")
+	if matchedKeyword != "" {
+		return defaultName
+	}
+
+	// No hint matched: use first meaningful part from directory
+	parts := strings.FieldsFunc(dirName, func(r rune) bool { return r == '-' || r == '_' })
+	for _, p := range parts {
+		p = strings.ToLower(p)
+		if p != "" && p != "service" && p != "app" && len(p) <= 20 {
+			return p
+		}
+	}
+	if len(parts) > 0 {
+		return strings.ToLower(parts[0])
+	}
+	if defaultName != "" {
+		return defaultName
+	}
+	return "app"
+}
+
+// ensureUniqueServiceNames deduplicates service names using directory-derived names when needed.
+func ensureUniqueServiceNames(info *ProjectInfo) {
+	used := make(map[string]bool)
+	for i := range info.Services {
+		name := info.Services[i].Name
+		dir := info.Services[i].Directory
+		base := name
+		for used[name] {
+			// Disambiguate: use distinguishing part from directory (e.g. "user" from "user-service")
+			parts := strings.FieldsFunc(dir, func(r rune) bool { return r == '-' || r == '_' })
+			found := false
+			for _, p := range parts {
+				cand := strings.ToLower(p)
+				if cand != "" && cand != base && !used[cand] {
+					name = cand
+					found = true
+					break
+				}
+			}
+			if !found {
+				// Use base + first dir segment: "service" + "user" -> "service-user"
+				if len(parts) > 0 {
+					name = base + "-" + strings.ToLower(parts[0])
+				} else {
+					slug := strings.ToLower(strings.Trim(dir, "-_"))
+					if slug == "" {
+						slug = "app"
+					}
+					name = base + "-" + slug
+				}
+			}
+			if !used[name] {
+				break
+			}
+			// Numeric suffix as last resort
+			for n := 1; n < 100; n++ {
+				cand := fmt.Sprintf("%s-%d", base, n)
+				if !used[cand] {
+					name = cand
+					break
+				}
+			}
+		}
+		used[name] = true
+		info.Services[i].Name = name
 	}
 }
 
@@ -481,6 +722,144 @@ func detectServices(dir string, info *ProjectInfo) {
 			}
 		}
 	}
+}
+
+// detectFrameworks detects web/server frameworks (e.g. uvicorn, flask, django) per service
+// and overrides the service command so they are started accordingly.
+func detectFrameworks(dir string, info *ProjectInfo) {
+	for i := range info.Services {
+		svc := &info.Services[i]
+		if svc.Type == "docker" && svc.DockerImage != "" {
+			continue
+		}
+		base := dir
+		if svc.Directory != "" && svc.Directory != "." {
+			base = filepath.Join(dir, svc.Directory)
+		}
+		detectPythonFramework(base, svc)
+	}
+}
+
+// detectPythonFramework checks requirements.txt/pyproject.toml and Python files in base
+// for uvicorn/fastapi, flask, or django, and sets svc.Command and svc.Framework.
+func detectPythonFramework(base string, svc *ServiceInfo) {
+	reqPath := filepath.Join(base, "requirements.txt")
+	pyprojectPath := filepath.Join(base, "pyproject.toml")
+	req := readFileIfExists(reqPath)
+	pyproject := readFileIfExists(pyprojectPath)
+	if req == "" && pyproject == "" {
+		return
+	}
+	lower := strings.ToLower(req + "\n" + pyproject)
+
+	hasUvicorn := strings.Contains(lower, "uvicorn") || strings.Contains(lower, "fastapi")
+	hasFlask := strings.Contains(lower, "flask")
+	hasDjango := strings.Contains(lower, "django")
+	managePy := readFileIfExists(filepath.Join(base, "manage.py")) != ""
+
+	// Prefer uvicorn/fastapi, then flask, then django
+	if hasUvicorn {
+		module, appName := resolveUvicornApp(base)
+		cmd := fmt.Sprintf("uvicorn %s:%s --reload --host 0.0.0.0", module, appName)
+		svc.Command = cmd
+		svc.Framework = "uvicorn"
+		return
+	}
+	if hasFlask {
+		svc.Command = "flask run --host=0.0.0.0"
+		svc.Framework = "flask"
+		return
+	}
+	if hasDjango || managePy {
+		port := 8000
+		if svc.Port > 0 {
+			port = svc.Port
+		}
+		svc.Command = fmt.Sprintf("python manage.py runserver 0.0.0.0:%d", port)
+		svc.Framework = "django"
+	}
+}
+
+// resolveUvicornApp scans Python files for FastAPI/Starlette app and returns "module:app".
+// Defaults to "main:app" if not found.
+func resolveUvicornApp(base string) (module, appName string) {
+	candidates := []string{"main.py", "app.py", "app/main.py", "src/main.py", "application.py"}
+	for _, rel := range candidates {
+		p := filepath.Join(base, rel)
+		data := readFileIfExists(p)
+		if data == "" {
+			continue
+		}
+		mod := strings.TrimSuffix(rel, ".py")
+		mod = strings.ReplaceAll(mod, string(filepath.Separator), ".")
+		// Look for app = FastAPI(...) or app = Application(...) or similar
+		lines := strings.Split(data, "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "#") {
+				continue
+			}
+			// app = FastAPI( or app = APIRouter( typically not the asgi app
+			if strings.Contains(line, "FastAPI(") || strings.Contains(line, "Application(") {
+				name := extractAppVarName(line)
+				if name != "" {
+					return mod, name
+				}
+			}
+		}
+	}
+	// Fallback: scan any *.py in base for FastAPI
+	entries, err := os.ReadDir(base)
+	if err != nil {
+		return "main", "app"
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(strings.ToLower(e.Name()), ".py") {
+			continue
+		}
+		data := readFileIfExists(filepath.Join(base, e.Name()))
+		if data == "" {
+			continue
+		}
+		mod := strings.TrimSuffix(e.Name(), ".py")
+		lines := strings.Split(data, "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "#") {
+				continue
+			}
+			if strings.Contains(line, "FastAPI(") || strings.Contains(line, "Application(") {
+				name := extractAppVarName(line)
+				if name != "" {
+					return mod, name
+				}
+			}
+		}
+	}
+	return "main", "app"
+}
+
+func extractAppVarName(line string) string {
+	// "app = FastAPI()" or "application = FastAPI()" or "api = FastAPI()"
+	idx := strings.Index(line, "=")
+	if idx < 0 {
+		return ""
+	}
+	left := strings.TrimSpace(line[:idx])
+	// avoid "if app = ..." etc.
+	for _, bad := range []string{"if", "elif", "for", "while", "("} {
+		if strings.HasPrefix(left, bad) {
+			return ""
+		}
+	}
+	// single identifier
+	if strings.Contains(left, " ") || strings.Contains(left, ".") {
+		return ""
+	}
+	if left != "" {
+		return left
+	}
+	return ""
 }
 
 // detectDatabaseServices scans project files and environment for common database usage
@@ -645,6 +1024,18 @@ func hasPythonServices(info *ProjectInfo) bool {
 	}
 	for _, s := range info.Services {
 		if strings.EqualFold(s.Language, "python") {
+			return true
+		}
+	}
+	return false
+}
+
+func hasNodeServices(info *ProjectInfo) bool {
+	if info.PackageMgr == "npm" {
+		return true
+	}
+	for _, s := range info.Services {
+		if strings.EqualFold(s.Language, "node") {
 			return true
 		}
 	}
@@ -844,6 +1235,33 @@ func promptProjectInfo(info *ProjectInfo) error {
 		}
 	}
 
+	// Python venv app scope: when Python service(s) detected, offer to activate venv for all services
+	if hasPythonServices(info) && len(info.Services) > 0 {
+		fmt.Print("\nActivate Python venv for entire app scope (all services including frontend)? [y/N]: ")
+		if input := readLine(reader); strings.ToLower(strings.TrimSpace(input)) == "y" || strings.ToLower(strings.TrimSpace(input)) == "yes" {
+			info.VenvAppScope = true
+			fmt.Print("Python version for venv [python3]: ")
+			if v := strings.TrimSpace(readLine(reader)); v != "" {
+				info.PythonVersion = v
+			} else {
+				info.PythonVersion = "python3"
+			}
+		}
+	}
+
+	// Framework/runtime versions: when Node detected, offer to set Node version
+	if hasNodeServices(info) {
+		if info.RuntimeVersions == nil {
+			info.RuntimeVersions = make(map[string]string)
+		}
+		fmt.Print("\nNode.js version (e.g. 18, 20) [18]: ")
+		if v := strings.TrimSpace(readLine(reader)); v != "" {
+			info.RuntimeVersions["node"] = v
+		} else {
+			info.RuntimeVersions["node"] = "18"
+		}
+	}
+
 	return nil
 }
 
@@ -862,6 +1280,38 @@ func generateConfig(info *ProjectInfo) string {
 	sb.WriteString(fmt.Sprintf("    description: \"%s\"\n", info.Description))
 	workdirAbs, _ := filepath.Abs(".")
 	sb.WriteString(fmt.Sprintf("    workdir: \"%s\"\n\n", workdirAbs))
+
+	// Python venv (app scope) when user opted in
+	if info.VenvAppScope && hasPythonServices(info) {
+		pyVer := info.PythonVersion
+		if pyVer == "" {
+			pyVer = "python3"
+		}
+		sb.WriteString("    python:\n")
+		sb.WriteString("      venv:\n")
+		sb.WriteString(fmt.Sprintf("        version: \"%s\"\n", pyVer))
+		sb.WriteString("        dir: \".venv\"\n")
+		sb.WriteString("        app_scope: true\n\n")
+	}
+
+	// Runtimes: framework versions (node, go, etc.)
+	if len(info.RuntimeVersions) > 0 {
+		sb.WriteString("    runtimes:\n")
+		order := []string{"node", "go", "python"}
+		seen := make(map[string]bool)
+		for _, k := range order {
+			if v, ok := info.RuntimeVersions[k]; ok {
+				sb.WriteString(fmt.Sprintf("      %s: \"%s\"\n", k, v))
+				seen[k] = true
+			}
+		}
+		for k, v := range info.RuntimeVersions {
+			if !seen[k] {
+				sb.WriteString(fmt.Sprintf("      %s: \"%s\"\n", k, v))
+			}
+		}
+		sb.WriteString("\n")
+	}
 
 	// Services
 	sb.WriteString("    services:\n")
@@ -970,15 +1420,29 @@ func generateConfig(info *ProjectInfo) string {
 
 		// Python venv setup scripts
 		pyDirs := pythonServiceDirs(info)
+		pyVer := info.PythonVersion
+		if pyVer == "" {
+			pyVer = "python3"
+		}
 		if len(pyDirs) > 0 {
 			sb.WriteString("      scripts:\n")
-			for _, d := range pyDirs {
-				if d == "" {
-					d = "."
+			if info.VenvAppScope {
+				// Single app-level venv: create .venv at root, install all Python deps
+				sb.WriteString(fmt.Sprintf("        - \"%s -m venv .venv || true\"\n", pyVer))
+				for _, d := range pyDirs {
+					if d == "" {
+						d = "."
+					}
+					sb.WriteString("        - \"if [ -f " + d + "/requirements.txt ]; then . .venv/bin/activate && pip install -r " + d + "/requirements.txt; fi\"\n")
 				}
-				sb.WriteString("        - \"cd " + d + " && python3 -m venv .venv || true\"\n")
-				// Install requirements only if present
-				sb.WriteString("        - \"cd " + d + " && if [ -f requirements.txt ]; then . .venv/bin/activate && pip install -r requirements.txt; fi\"\n")
+			} else {
+				for _, d := range pyDirs {
+					if d == "" {
+						d = "."
+					}
+					sb.WriteString(fmt.Sprintf("        - \"cd %s && %s -m venv .venv || true\"\n", d, pyVer))
+					sb.WriteString("        - \"cd " + d + " && if [ -f requirements.txt ]; then . .venv/bin/activate && pip install -r requirements.txt; fi\"\n")
+				}
 			}
 		}
 	}
@@ -1001,6 +1465,17 @@ func generateConfig(info *ProjectInfo) string {
 	sb.WriteString("\n    install:\n")
 	sb.WriteString("      steps:\n")
 
+	// When app-scope venv, create .venv first so Python install steps can use it
+	if info.VenvAppScope && hasPythonServices(info) {
+		pyVer := info.PythonVersion
+		if pyVer == "" {
+			pyVer = "python3"
+		}
+		sb.WriteString("        - name: \"Create app Python venv\"\n")
+		sb.WriteString("          commands:\n")
+		sb.WriteString(fmt.Sprintf("            - \"%s -m venv .venv || true\"\n", pyVer))
+	}
+
 	// Root-level package manager steps using commands arrays
 	// Always check for common manifests to ensure root installs are included
 	if _, err := os.Stat("package.json"); err == nil || info.PackageMgr == "npm" {
@@ -1016,7 +1491,11 @@ func generateConfig(info *ProjectInfo) string {
 	if _, err := os.Stat("requirements.txt"); err == nil || info.PackageMgr == "pip" {
 		sb.WriteString("        - name: \"Install Python dependencies (root)\"\n")
 		sb.WriteString("          commands:\n")
-		sb.WriteString("            - \"pip install -r requirements.txt\"\n")
+		if info.VenvAppScope {
+			sb.WriteString("            - \". .venv/bin/activate && pip install -r requirements.txt\"\n")
+		} else {
+			sb.WriteString("            - \"pip install -r requirements.txt\"\n")
+		}
 	}
 	if _, err := os.Stat("Pipfile"); err == nil || info.PackageMgr == "pipenv" {
 		sb.WriteString("        - name: \"Install Pipenv dependencies (root)\"\n")
@@ -1074,7 +1553,15 @@ func generateConfig(info *ProjectInfo) string {
 			sb.WriteString(fmt.Sprintf("        - name: \"Install Python dependencies (%s)\"\n", svc.Name))
 			sb.WriteString(fmt.Sprintf("          workdir: \"%s\"\n", wd))
 			sb.WriteString("          commands:\n")
-			sb.WriteString("            - \"pip install -r requirements.txt\"\n")
+			if info.VenvAppScope {
+				relVenv := ".venv"
+				if wd != "." {
+					relVenv = filepath.Join("..", ".venv")
+				}
+				sb.WriteString(fmt.Sprintf("            - \". %s/bin/activate && pip install -r requirements.txt\"\n", relVenv))
+			} else {
+				sb.WriteString("            - \"pip install -r requirements.txt\"\n")
+			}
 		}
 		// Pipenv
 		if _, err := os.Stat(filepath.Join(wd, "Pipfile")); err == nil {

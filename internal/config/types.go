@@ -69,6 +69,21 @@ type SetupCheck struct {
 	Message string `yaml:"message,omitempty"`
 }
 
+// PythonVenvConfig configures the Python virtual environment
+type PythonVenvConfig struct {
+	Version  string `yaml:"version,omitempty"`   // Python executable for venv (e.g. "python3", "python3.11")
+	Dir      string `yaml:"dir,omitempty"`       // venv directory relative to app workdir (default ".venv")
+	AppScope bool   `yaml:"app_scope,omitempty"` // when true, venv is activated for all services (frontend, backend, etc.)
+}
+
+// PythonConfig holds Python-specific app configuration
+type PythonConfig struct {
+	Venv *PythonVenvConfig `yaml:"venv,omitempty"`
+}
+
+// Runtimes defines framework/runtime versions for services (e.g. node: "18", go: "1.21")
+type Runtimes map[string]string
+
 // AppSpec defines a specific application that devup can manage
 type AppSpec struct {
 	Name        string            `yaml:"name"`
@@ -77,6 +92,8 @@ type AppSpec struct {
 	Services    []Service         `yaml:"services"`
 	Modes       map[string]Mode   `yaml:"modes"`
 	Environment map[string]string `yaml:"environment,omitempty"`
+	Python      *PythonConfig     `yaml:"python,omitempty"`
+	Runtimes    Runtimes          `yaml:"runtimes,omitempty"` // framework versions: node, go, etc.
 	Hooks       Hooks             `yaml:"hooks,omitempty"`
 	Health      HealthConfig      `yaml:"health,omitempty"`
 	Install     InstallConfig     `yaml:"install,omitempty"`
